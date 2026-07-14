@@ -14,6 +14,7 @@ interface FeedItem {
   curatorNames: string[];
   curatorIds: string[];
   contentSnippet: string;
+  image?: string;
 }
 
 interface Curator {
