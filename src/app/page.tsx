@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { CuratorCard } from "@/components/CuratorCard";
 import { ArticleCard } from "@/components/ArticleCard";
@@ -77,13 +77,28 @@ export default function Home() {
 
   const hasFollows = local.followedIds.length > 0;
 
-  const filteredItems = items
-    .filter((item) => !local.removedSources.includes(item.sourceTitle))
-    .filter((item) => !local.hiddenLinks.includes(item.link))
-    .filter((item) => {
-      if (tab === "your") return item.curatorIds.some((id) => local.followedIds.includes(id));
-      return true;
-    });
+  const filteredItems = useMemo(() => {
+    let result = items
+      .filter((item) => !local.removedSources.includes(item.sourceTitle))
+      .filter((item) => !local.hiddenLinks.includes(item.link))
+      .filter((item) => {
+        if (tab === "your") return item.curatorIds.some((id) => local.followedIds.includes(id));
+        return true;
+      });
+
+    if (sort === "popular") {
+      // Sort by vote score (up=+1, down=-1), then by curator count, then date
+      result = [...result].sort((a, b) => {
+        const scoreA = local.votes[a.link] ?? 0;
+        const scoreB = local.votes[b.link] ?? 0;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        if (b.curatorNames.length !== a.curatorNames.length) return b.curatorNames.length - a.curatorNames.length;
+        return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime();
+      });
+    }
+
+    return result;
+  }, [items, local, tab, sort]);
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-8">
