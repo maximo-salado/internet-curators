@@ -12,6 +12,7 @@ interface FeedItem {
   curatorNames: string[];
   curatorIds: string[];
   contentSnippet: string;
+  image?: string;
 }
 
 export async function GET(req: Request) {
@@ -43,6 +44,11 @@ export async function GET(req: Request) {
         const curatorId = source.collections?.curator_id ?? null;
 
         for (const item of feed.items ?? []) {
+          const img =
+            item.enclosure?.url && item.enclosure?.type?.startsWith("image/")
+              ? item.enclosure.url
+              : (item as any)["media:content"]?.$.url || (item as any)["media:thumbnail"]?.$.url || undefined;
+
           allItems.push({
             title: item.title ?? "Untitled",
             link: item.link ?? "",
@@ -52,6 +58,7 @@ export async function GET(req: Request) {
             curatorNames: [curatorName],
             curatorIds: curatorId ? [curatorId] : [],
             contentSnippet: (item.contentSnippet ?? "").slice(0, 300),
+            ...(img ? { image: img } : {}),
           });
         }
       } catch {}

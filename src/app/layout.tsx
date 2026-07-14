@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { UserMenu } from "@/components/UserMenu";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,51 +26,23 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-black text-zinc-100">
         <header className="border-b border-zinc-800">
           <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-            <Link href="/" className="text-lg font-semibold tracking-tight">
-              Internet Curators
-            </Link>
-            <div className="flex items-center gap-6 text-sm">
+            <div className="flex items-center gap-6">
+              <Link href="/" className="text-lg font-semibold tracking-tight">
+                Internet Curators
+              </Link>
+            </div>
+            <div className="flex items-center gap-4">
               {user ? (
-                <div className="flex items-center gap-6 text-sm">
-                  <Link
-                    href="/"
-                    className="text-zinc-400 transition-colors hover:text-zinc-100"
-                  >
-                    Feed
-                  </Link>
-                  <Link
-                    href="/dashboard"
-                    className="text-zinc-400 transition-colors hover:text-zinc-100"
-                  >
-                    Dashboard
-                  </Link>
-                  <span className="text-zinc-500">{user.email}</span>
-                  <form action="/auth/signout" method="post">
-                    <button
-                      type="submit"
-                      className="rounded-md bg-zinc-800 px-3 py-1.5 text-zinc-300 transition-colors hover:bg-zinc-700"
-                    >
-                      Sign Out
-                    </button>
-                  </form>
-                </div>
+                <UserMenu email={user.email!} />
               ) : (
-                <Link
-                  href="/login"
-                  className="rounded-md bg-zinc-800 px-3 py-1.5 text-zinc-300 transition-colors hover:bg-zinc-700"
-                >
+                <Link href="/login" className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-700">
                   Sign In
                 </Link>
               )}
