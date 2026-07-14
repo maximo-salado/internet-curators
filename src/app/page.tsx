@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { CuratorCard } from "@/components/CuratorCard";
 import { ArticleCard } from "@/components/ArticleCard";
+import { CuratorStories } from "@/components/CuratorStories";
 
 interface FeedItem {
   title: string;
@@ -38,7 +40,9 @@ function readLocalStorage() {
 
 export default function Home() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<Tab>("feed");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tab = (searchParams.get("tab") as Tab) || "feed";
   const [sort, setSort] = useState<Sort>("latest");
   const [items, setItems] = useState<FeedItem[]>([]);
   const [curators, setCurators] = useState<Curator[]>([]);
@@ -101,14 +105,15 @@ export default function Home() {
   }, [items, local, tab, sort]);
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-8">
-      <div className="mb-6 flex items-center justify-between">
+    <main className="mx-auto w-full max-w-2xl flex-1 py-4">
+      <CuratorStories />
+      <div className="px-4 mt-4 mb-4 flex items-center justify-between">
         <div className="flex gap-6">
-          <button onClick={() => setTab("feed")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "feed" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Feed</button>
+          <button onClick={() => router.push("/?tab=feed")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "feed" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Feed</button>
           {user && (
-            <button onClick={() => setTab("your")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "your" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Your Feed</button>
+            <button onClick={() => router.push("/?tab=your")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "your" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Your Feed</button>
           )}
-          <button onClick={() => setTab("curators")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "curators" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Popular Curators</button>
+          <button onClick={() => router.push("/?tab=curators")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "curators" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Popular Curators</button>
         </div>
         {tab !== "curators" && (
           <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 outline-none">
@@ -146,7 +151,7 @@ export default function Home() {
           <p className="mt-2 text-sm text-zinc-600">Curators are building their collections. Check back soon.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="px-4 space-y-2">
           {filteredItems.map((item, i) => (
             <ArticleCard
               key={`${item.link}-${i}`}
