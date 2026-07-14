@@ -48,7 +48,7 @@ export default async function RootLayout({
                 Feed
               </Link>
               <Link
-                href="/popular"
+                href="/"
                 className="text-zinc-400 transition-colors hover:text-zinc-100"
               >
                 Popular
