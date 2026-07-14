@@ -17,10 +17,12 @@ export async function GET(
   if (error || !curator)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // Only return published collections for public profiles
   const { data: collections } = await supabase
     .from("collections")
-    .select("id, name, description, slug, created_at")
+    .select("id, name, description, slug, published, created_at")
     .eq("curator_id", id)
+    .eq("published", true)
     .order("created_at", { ascending: false });
 
   return NextResponse.json({ ...curator, collections });

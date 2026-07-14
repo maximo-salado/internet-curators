@@ -69,23 +69,22 @@ export default function Home() {
         .then((data) => setCurators(Array.isArray(data) ? data : []))
         .finally(() => setLoading(false));
     } else {
-      fetch(`/api/feed?sort=${sort}`)
+      const params = new URLSearchParams({ sort });
+      if (tab === "your") {
+        params.set("feed", "your");
+        params.set("followed", local.followedIds.join(","));
+      }
+      fetch(`/api/feed?${params}`)
         .then((r) => r.json())
         .then((data) => setItems(Array.isArray(data) ? data : []))
         .finally(() => setLoading(false));
     }
-  }, [tab, sort]);
-
-  const hasFollows = local.followedIds.length > 0;
+  }, [tab, sort, local.followedIds]);
 
   const filteredItems = useMemo(() => {
     let result = items
       .filter((item) => !local.removedSources.includes(item.sourceTitle))
-      .filter((item) => !local.hiddenLinks.includes(item.link))
-      .filter((item) => {
-        if (tab === "your") return item.curatorIds.some((id) => local.followedIds.includes(id));
-        return true;
-      });
+      .filter((item) => !local.hiddenLinks.includes(item.link));
 
     if (sort === "popular") {
       // Sort by vote score (up=+1, down=-1), then by curator count, then date
@@ -106,7 +105,7 @@ export default function Home() {
       <div className="mb-6 flex items-center justify-between">
         <div className="flex gap-6">
           <button onClick={() => setTab("feed")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "feed" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Feed</button>
-          {user && hasFollows && (
+          {user && (
             <button onClick={() => setTab("your")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "your" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Your Feed</button>
           )}
           <button onClick={() => setTab("curators")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "curators" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Popular Curators</button>

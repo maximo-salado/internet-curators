@@ -68,7 +68,9 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote }: ArticleCardP
           )}
           <div className="mt-3 flex items-center justify-between">
             <p className="text-xs text-zinc-600">
-              via {item.curatorNames.join(", ")} · {new Date(item.pubDate).toLocaleDateString()}
+              {item.curatorNames.length > 0
+                ? `via ${item.curatorNames.join(", ")} · ${new Date(item.pubDate).toLocaleDateString()}`
+                : `Trending · ${new Date(item.pubDate).toLocaleDateString()}`}
             </p>
             <div className="flex items-center gap-1">
               <button onClick={() => handleVote(1)} className={`rounded px-1.5 py-0.5 text-xs transition-colors ${vote === 1 ? "text-green-400" : "text-zinc-600 hover:text-zinc-400"}`}>▲</button>

@@ -10,7 +10,7 @@ export async function GET(
 
   const { data: collection, error } = await supabase
     .from("collections")
-    .select("id, curator_id, name, description, slug, created_at, curators(display_name)")
+    .select("id, curator_id, name, description, slug, published, created_at, curators(display_name)")
     .eq("slug", slug)
     .single();
 

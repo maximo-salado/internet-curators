@@ -9,6 +9,7 @@ interface Collection {
   name: string;
   description: string;
   slug: string;
+  published: boolean;
   created_at: string;
 }
 
@@ -54,6 +55,19 @@ export default function DashboardPage() {
       setError(msg || "Failed to create collection");
     }
     setSubmitting(false);
+  }
+
+  async function togglePublished(col: Collection) {
+    const res = await fetch("/api/collections", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: col.id, published: !col.published }),
+    });
+    if (res.ok) {
+      setCollections(collections.map((c) =>
+        c.id === col.id ? { ...c, published: !c.published } : c
+      ));
+    }
   }
 
   return (
@@ -108,15 +122,23 @@ export default function DashboardPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {collections.map((col) => (
-            <Link
-              key={col.id}
-              href={`/dashboard/collections/${col.slug}`}
-              className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 hover:border-zinc-700 transition-colors"
-            >
-              <h3 className="font-medium">{col.name}</h3>
-              {col.description && <p className="mt-1 text-sm text-zinc-500">{col.description}</p>}
-              <p className="mt-2 text-xs text-zinc-600">{col.slug}</p>
-            </Link>
+            <div key={col.id} className="flex items-center gap-4 rounded-lg border border-zinc-800 bg-zinc-900 p-5 hover:border-zinc-700 transition-colors">
+              <Link href={`/dashboard/collections/${col.slug}`} className="min-w-0 flex-1">
+                <h3 className="font-medium">{col.name}</h3>
+                {col.description && <p className="mt-1 text-sm text-zinc-500">{col.description}</p>}
+                <p className="mt-2 text-xs text-zinc-600">{col.slug}</p>
+              </Link>
+              <button
+                onClick={() => togglePublished(col)}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  col.published
+                    ? "bg-green-900 text-green-400 hover:bg-green-800"
+                    : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300"
+                }`}
+              >
+                {col.published ? "Published" : "Draft"}
+              </button>
+            </div>
           ))}
         </div>
       )}
