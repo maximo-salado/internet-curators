@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { UserMenu } from "@/components/UserMenu";
+import { SearchBar } from "@/components/SearchBar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,6 +38,7 @@ export default async function RootLayout({
               <Link href="/" className="text-lg font-semibold tracking-tight">
                 Internet Curators
               </Link>
+              <SearchBar />
             </div>
             <div className="flex items-center gap-4">
               {user ? (
