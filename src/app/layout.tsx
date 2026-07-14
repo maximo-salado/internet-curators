@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { UserMenu } from "@/components/UserMenu";
-import { SearchBar } from "@/components/SearchBar";
+import { BottomNav } from "@/components/BottomNav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,17 +29,25 @@ export default async function RootLayout({
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  // Get curator ID for Profile link
+  let curatorId: string | undefined;
+  if (user) {
+    const { data: curator } = await supabase
+      .from("curators")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+    if (curator) curatorId = curator.id;
+  }
+
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-black text-zinc-100">
+      <body className="min-h-full flex flex-col bg-black text-zinc-100 pb-14">
         <header className="border-b border-zinc-800">
           <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-            <div className="flex items-center gap-6">
-              <Link href="/" className="text-lg font-semibold tracking-tight">
-                Internet Curators
-              </Link>
-              <SearchBar />
-            </div>
+            <Link href="/" className="text-lg font-semibold tracking-tight">
+              Internet Curators
+            </Link>
             <div className="flex items-center gap-4">
               {user ? (
                 <UserMenu email={user.email!} />
@@ -52,6 +60,7 @@ export default async function RootLayout({
           </nav>
         </header>
         <main className="flex-1">{children}</main>
+        <BottomNav user={!!user} curatorId={curatorId} />
       </body>
     </html>
   );

@@ -129,5 +129,24 @@ export async function GET(req: Request) {
     items.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
   }
 
-  return NextResponse.json(items.slice(0, 50));
+  // Attach vote counts
+  const sliced = items.slice(0, 50);
+  const links = sliced.map((i) => i.link);
+  const { data: votes } = await supabase
+    .from("article_votes")
+    .select("link, upvotes, downvotes")
+    .in("link", links);
+
+  const voteMap = new Map<string, { upvotes: number; downvotes: number }>();
+  for (const v of votes ?? []) {
+    voteMap.set(v.link, { upvotes: v.upvotes, downvotes: v.downvotes });
+  }
+
+  const withVotes = sliced.map((item) => ({
+    ...item,
+    upvotes: voteMap.get(item.link)?.upvotes ?? 0,
+    downvotes: voteMap.get(item.link)?.downvotes ?? 0,
+  }));
+
+  return NextResponse.json(withVotes);
 }
