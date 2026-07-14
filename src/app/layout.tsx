@@ -41,20 +41,14 @@ export default async function RootLayout({
               Internet Curators
             </Link>
             <div className="flex items-center gap-6 text-sm">
-              <Link
-                href="/"
-                className="text-zinc-400 transition-colors hover:text-zinc-100"
-              >
-                Feed
-              </Link>
-              <Link
-                href="/"
-                className="text-zinc-400 transition-colors hover:text-zinc-100"
-              >
-                Popular
-              </Link>
               {user ? (
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6 text-sm">
+                  <Link
+                    href="/"
+                    className="text-zinc-400 transition-colors hover:text-zinc-100"
+                  >
+                    Feed
+                  </Link>
                   <Link
                     href="/dashboard"
                     className="text-zinc-400 transition-colors hover:text-zinc-100"
