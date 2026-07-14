@@ -18,6 +18,7 @@ interface Collection {
   name: string;
   description: string;
   slug: string;
+  published: boolean;
   sources: Source[];
 }
 
@@ -64,6 +65,16 @@ export default function CollectionDetailPage() {
     if (res.ok) fetchCollection();
   }
 
+  async function togglePublished() {
+    if (!collection) return;
+    const res = await fetch("/api/collections", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: collection.id, published: !collection.published }),
+    });
+    if (res.ok) fetchCollection();
+  }
+
   if (loading) return <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12"><p className="text-sm text-zinc-500">Loading...</p></main>;
   if (!collection) return <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12"><p className="text-zinc-400">Collection not found.</p></main>;
 
@@ -72,9 +83,23 @@ export default function CollectionDetailPage() {
       <Link href="/dashboard" className="mb-6 inline-block text-sm text-zinc-500 hover:text-zinc-300">← Back to Dashboard</Link>
 
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold">{collection.name}</h1>
-        {collection.description && <p className="mt-2 text-zinc-400">{collection.description}</p>}
-        <p className="mt-1 text-xs text-zinc-600">/{collection.slug}</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">{collection.name}</h1>
+            {collection.description && <p className="mt-2 text-zinc-400">{collection.description}</p>}
+            <p className="mt-1 text-xs text-zinc-600">/{collection.slug}</p>
+          </div>
+          <button
+            onClick={togglePublished}
+            className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              collection.published
+                ? "bg-green-900 text-green-400 hover:bg-green-800"
+                : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300"
+            }`}
+          >
+            {collection.published ? "Published" : "Draft"}
+          </button>
+        </div>
       </div>
 
       {/* Add source form */}
