@@ -29,9 +29,9 @@ export function BottomNav({ user, curatorId }: Props) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-800 bg-black/95 backdrop-blur safe-bottom">
       <div className="mx-auto flex max-w-lg items-center justify-around h-14">
-        <button onClick={() => handleTab("feed")} className="flex flex-col items-center gap-0.5">
-          <HomeIcon active={pathname === "/" && currentTab !== "your"} />
-          <span className={`text-[10px] leading-none ${pathname === "/" && currentTab !== "your" ? "text-zinc-100" : "text-zinc-500"}`}>Feed</span>
+        <button onClick={() => router.push("/feed?tab=feed")} className="flex flex-col items-center gap-0.5">
+          <HomeIcon active={pathname === "/feed" && currentTab !== "your"} />
+          <span className={`text-[10px] leading-none ${pathname === "/feed" && currentTab !== "your" ? "text-zinc-100" : "text-zinc-500"}`}>Feed</span>
         </button>
         <Link href="/search" className="flex flex-col items-center gap-0.5">
           <SearchIcon active={pathname === "/search"} />
@@ -39,9 +39,9 @@ export function BottomNav({ user, curatorId }: Props) {
         </Link>
         {user && (
           <>
-            <button onClick={() => handleTab("your")} className="flex flex-col items-center gap-0.5">
-              <PersonIcon active={pathname === "/" && currentTab === "your"} />
-              <span className={`text-[10px] leading-none ${pathname === "/" && currentTab === "your" ? "text-zinc-100" : "text-zinc-500"}`}>You</span>
+            <button onClick={() => router.push("/feed?tab=your")} className="flex flex-col items-center gap-0.5">
+              <PersonIcon active={pathname === "/feed" && currentTab === "your"} />
+              <span className={`text-[10px] leading-none ${pathname === "/feed" && currentTab === "your" ? "text-zinc-100" : "text-zinc-500"}`}>You</span>
             </button>
             <Link href="/dashboard" className="flex flex-col items-center gap-0.5">
               <GearIcon active={pathname === "/dashboard"} />

@@ -17,18 +17,12 @@ export function LandingPage() {
           subscribe to their collections via RSS. No AI. No tracking. Just
           people pointing at the good stuff.
         </p>
-        <div className="mt-10 flex items-center justify-center gap-4">
+        <div className="mt-10">
           <Link
-            href="/signup"
-            className="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
+            href="/feed"
+            className="inline-block rounded-lg bg-white px-8 py-3 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
           >
-            Start curating
-          </Link>
-          <Link
-            href="/login"
-            className="rounded-lg border border-zinc-700 px-6 py-3 text-sm font-medium text-zinc-300 hover:border-zinc-500 transition-colors"
-          >
-            Sign in
+            Browse the feed →
           </Link>
         </div>
       </section>
@@ -85,26 +79,6 @@ export function LandingPage() {
               title="Subscribe anywhere"
               description="Every published collection has an RSS feed. Subscribe in Feedly, NetNewsWire, or any RSS reader. Curate once, read everywhere."
             />
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="border-t border-zinc-800 py-20">
-        <div className="mx-auto max-w-2xl px-6 text-center">
-          <h2 className="text-2xl font-semibold">
-            Build your corner of the internet
-          </h2>
-          <p className="mt-4 text-zinc-400">
-            Start curating the sources you love. Share them with the world.
-          </p>
-          <div className="mt-8">
-            <Link
-              href="/signup"
-              className="rounded-lg bg-white px-8 py-3 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
-            >
-              Get started — it's free
-            </Link>
           </div>
         </div>
       </section>

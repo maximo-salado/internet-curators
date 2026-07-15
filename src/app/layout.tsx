@@ -45,9 +45,14 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col bg-black text-zinc-100 pb-14">
         <header className="border-b border-zinc-800">
           <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-            <Link href="/" className="text-lg font-semibold tracking-tight">
-              Internet Curators
-            </Link>
+            <div className="flex items-center gap-6">
+              <Link href="/" className="text-lg font-semibold tracking-tight">
+                Internet Curators
+              </Link>
+              <Link href="/feed" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
+                App →
+              </Link>
+            </div>
             <div className="flex items-center gap-4">
               {user ? (
                 <UserMenu email={user.email!} />
