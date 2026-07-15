@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { CuratorCard } from "@/components/CuratorCard";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CuratorStories } from "@/components/CuratorStories";
+import { LandingPage } from "@/components/LandingPage";
 
 interface FeedItem {
   title: string;
@@ -93,7 +94,6 @@ export default function Home() {
       .filter((item) => !local.hiddenLinks.includes(item.link));
 
     if (sort === "popular") {
-      // Sort by vote score (up=+1, down=-1), then by curator count, then date
       result = [...result].sort((a, b) => {
         const scoreA = local.votes[a.link] ?? 0;
         const scoreB = local.votes[b.link] ?? 0;
@@ -106,15 +106,22 @@ export default function Home() {
     return result;
   }, [items, local, tab, sort]);
 
+  // Not logged in: show landing page
+  if (!user) {
+    return (
+      <main className="mx-auto w-full max-w-2xl flex-1">
+        <LandingPage />
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 py-4">
       <CuratorStories />
       <div className="px-4 mt-4 mb-4 flex items-center justify-between">
         <div className="flex gap-6">
           <button onClick={() => router.push("/?tab=feed")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "feed" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Feed</button>
-          {user && (
-            <button onClick={() => router.push("/?tab=your")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "your" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Your Feed</button>
-          )}
+          <button onClick={() => router.push("/?tab=your")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "your" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Your Feed</button>
           <button onClick={() => router.push("/?tab=curators")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "curators" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Popular Curators</button>
         </div>
         {tab !== "curators" && (
