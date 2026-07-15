@@ -17,6 +17,8 @@ interface FeedItem {
   curatorIds: string[];
   contentSnippet: string;
   image?: string;
+  upvotes?: number;
+  downvotes?: number;
 }
 
 interface Curator {
