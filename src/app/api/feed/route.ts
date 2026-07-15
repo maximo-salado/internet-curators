@@ -6,6 +6,12 @@ import Parser from "rss-parser";
 
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
+function extractFirstImg(html: string | undefined): string | undefined {
+  if (!html) return undefined;
+  const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return match?.[1];
+}
+
 interface FeedItem {
   title: string;
   link: string;
@@ -76,6 +82,9 @@ export async function GET(req: Request) {
               ? item.enclosure.url
               : (item as any)["media:content"]?.$.url
                 || (item as any)["media:thumbnail"]?.$.url
+                || extractFirstImg((item as any)["content:encoded"])
+                || extractFirstImg(item.content)
+                || extractFirstImg(item.description)
                 || undefined;
 
           const article = {
@@ -196,6 +205,28 @@ export async function GET(req: Request) {
     items.sort((a, b) => b.curatorNames.length - a.curatorNames.length);
   } else {
     items.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+  }
+
+  // 7b. Interleave by source so no source dominates consecutively
+  const bySource = new Map<string, typeof items>();
+  for (const item of items) {
+    const key = item.sourceTitle;
+    if (!bySource.has(key)) bySource.set(key, []);
+    bySource.get(key)!.push(item);
+  }
+  const sourceKeys = Array.from(bySource.keys());
+  items = [];
+  let idx = 0;
+  while (items.length < 200 && sourceKeys.length > 0) {
+    const sourceKey = sourceKeys[idx % sourceKeys.length];
+    const bucket = bySource.get(sourceKey)!;
+    if (bucket.length > 0) {
+      items.push(bucket.shift()!);
+    } else {
+      sourceKeys.splice(idx % sourceKeys.length, 1);
+      continue;
+    }
+    idx++;
   }
 
   // 8. Attach vote counts
