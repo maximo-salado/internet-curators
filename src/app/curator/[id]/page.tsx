@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ProfileMenu } from "@/components/ProfileMenu";
 
 export default async function CuratorPage({
   params,
@@ -18,6 +19,18 @@ export default async function CuratorPage({
 
   if (!curator) notFound();
 
+  // Check if viewing own profile
+  const { data: { user } } = await supabase.auth.getUser();
+  let isOwn = false;
+  if (user) {
+    const { data: own } = await supabase
+      .from("curators")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+    isOwn = own?.id === id;
+  }
+
   const { data: collections } = await supabase
     .from("collections")
     .select("id, name, description, slug, created_at")
@@ -27,9 +40,12 @@ export default async function CuratorPage({
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <Link href="/" className="mb-6 inline-block text-sm text-zinc-500 hover:text-zinc-300">
-        ← Back
-      </Link>
+      <div className="mb-6 flex items-center justify-between">
+        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+          ← Back
+        </Link>
+        {isOwn && <ProfileMenu />}
+      </div>
 
       <div className="mb-10">
         <h1 className="text-2xl font-semibold">{curator.display_name}</h1>
