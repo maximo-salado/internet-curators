@@ -23,6 +23,18 @@ Curators replace the algorithm. Follow people whose taste you trust, scroll an I
 
 Next.js 16 · TypeScript · Tailwind CSS · Supabase (auth + database) · RSS Parser
 
+## AI-Augmented Development
+
+This project is built by a solo designer using a three-agent AI stack:
+
+| Role | Agent | Model |
+|------|-------|-------|
+| orchestration | [Hermes](https://github.com/nousresearch/hermes-agent) | DeepSeek V4 Pro |
+| code | [OpenCode Go](https://opencode.ai) | `opencode-go/deepseek-v4-flash` |
+| review | [Claude Code](https://claude.ai) | Sonnet 4 |
+
+Commits use `<role>: <agent>` attribution.
+
 ## POC Status
 
 All phases complete. Deployed at [internet-curators.vercel.app](https://internet-curators.vercel.app).
