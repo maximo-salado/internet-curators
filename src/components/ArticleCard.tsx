@@ -48,17 +48,23 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote }: ArticleCardP
   if (hidden) return null;
   const handleVote = (dir: 1 | -1) => {
     const votes = JSON.parse(localStorage.getItem("ic:votes") ?? "{}") as Record<string, number>;
-    const current = votes[item.link] ?? 0;
-    const next = current === dir ? 0 : dir;
+    const prev = votes[item.link] ?? 0;
+    const next = prev === dir ? 0 : dir;
     votes[item.link] = next;
     localStorage.setItem("ic:votes", JSON.stringify(votes));
     window.dispatchEvent(new Event("ic:votes-updated"));
 
-    // Optimistic count update
-    if (dir === 1) setUpCount((c) => current === 1 ? c - 1 : c + 1);
-    else setDownCount((c) => current === -1 ? c - 1 : c + 1);
+    // Optimistic: undo old vote, apply new vote
+    if (prev === 1) setUpCount((c) => c - 1);
+    if (prev === -1) setDownCount((c) => c - 1);
+    if (next === 1) setUpCount((c) => c + 1);
+    if (next === -1) setDownCount((c) => c + 1);
 
-    fetch("/api/votes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ link: item.link, direction: dir }) }).catch(() => {});
+    fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ link: item.link, prev, next }),
+    }).catch(() => {});
   };
 
   const handleHide = () => {
