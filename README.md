@@ -29,11 +29,11 @@ This project is built by a solo designer using a three-agent AI stack:
 
 | Role | Agent | Model |
 |------|-------|-------|
-| Orchestration | [Hermes](https://github.com/nousresearch/hermes-agent) | DeepSeek V4 Pro |
-| Code | [OpenCode Go](https://opencode.ai) | `opencode-go/deepseek-v4-flash` |
-| Audit & Review | [Claude Code](https://claude.ai) | Sonnet 4 |
+| orchestration | [Hermes](https://github.com/nousresearch/hermes-agent) | DeepSeek V4 Pro |
+| code | [OpenCode Go](https://opencode.ai) | `opencode-go/deepseek-v4-flash` |
+| review | [Claude Code](https://claude.ai) | Sonnet 4 |
 
-Commits and PRs use `Co-authored-by:` trailers for transparency. See [.github/AGENT_ATTRIBUTION.md](.github/AGENT_ATTRIBUTION.md).
+Commits use `<role>: <agent>` attribution.
 
 ## POC Status
 
