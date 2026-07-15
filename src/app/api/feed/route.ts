@@ -1,4 +1,3 @@
-// @ts-nocheck — Supabase nested join types don't match runtime
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { NextResponse } from "next/server";
@@ -28,7 +27,6 @@ interface FeedItem {
 
 export async function GET(req: Request) {
   const supabase = await createClient();
-  const serviceClient = createServiceClient();
   const { searchParams } = new URL(req.url);
   const sort = searchParams.get("sort") ?? "latest";
 
@@ -80,6 +78,8 @@ export async function GET(req: Request) {
         : 0;
       if (now - lastFetch < CACHE_TTL) return; // cache is fresh
 
+      // Service-role client scoped to write operations only
+      const serviceClient = createServiceClient();
       try {
         const feed = await new Promise<any>((resolve, reject) => {
           const timer = setTimeout(() => reject(new Error("timeout")), 8000);
@@ -203,22 +203,22 @@ export async function GET(req: Request) {
     }
   }
 
-  let items = Array.from(seen.values());
+  let rawItems = Array.from(seen.values());
 
   // 5. "Your Feed" filter — only user's own sources + followed
   if (feedMode === "your") {
     if (!userCuratorId) {
       return NextResponse.json([]);
     }
-    items = items.filter((item) => {
-      if (item.curatorIds.includes(userCuratorId)) return true;
+    rawItems = rawItems.filter((item) => {
+      if (item.curatorIds.includes(userCuratorId!)) return true;
       return item.publishedCurators.size > 0 &&
         item.curatorIds.some((id) => followedIds.includes(id));
     });
   }
 
   // 6. Two-tier attribution: strip names from private-only articles
-  items = items.map(({ publishedCurators, ...item }) => {
+  let items: FeedItem[] = rawItems.map(({ publishedCurators, ...item }) => {
     if (publishedCurators.size === 0) {
       return { ...item, curatorNames: [] as string[] };
     }
