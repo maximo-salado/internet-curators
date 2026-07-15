@@ -9,6 +9,8 @@ interface FeedItem {
   pubDate: string;
   sourceTitle: string;
   sourceUrl: string;
+  sourceId?: string;
+  feedUrl?: string;
   curatorNames: string[];
   curatorIds: string[];
   contentSnippet: string;
@@ -23,17 +25,43 @@ interface ArticleCardProps {
   onRemoveSource: (sourceTitle: string) => void;
   hidden: boolean;
   vote: number;
+  showAddSource?: boolean;
 }
 
-export function ArticleCard({ item, onRemoveSource, hidden, vote }: ArticleCardProps) {
+export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource }: ArticleCardProps) {
   const [confirming, setConfirming] = useState<"hide" | "remove" | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLElement>(null);
   const router = useRouter();
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
   const [upCount, setUpCount] = useState(item.upvotes ?? 0);
   const [downCount, setDownCount] = useState(item.downvotes ?? 0);
   const [read, setRead] = useState(false);
+
+  const handleAddSource = async () => {
+    if (adding || added || !item.feedUrl) return;
+    setAdding(true);
+    try {
+      const res = await fetch("/api/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedUrl: item.feedUrl,
+          sourceTitle: item.sourceTitle,
+          sourceUrl: item.sourceUrl,
+        }),
+      });
+      const data = await res.json();
+      if (data.added) {
+        setAdded(true);
+        window.dispatchEvent(new CustomEvent("ic:source-added", { detail: item.sourceTitle }));
+      }
+    } catch {} finally {
+      setAdding(false);
+    }
+  };
 
   // Check if already read on mount
   useEffect(() => {
@@ -172,6 +200,22 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote }: ArticleCardP
           </p>
         {/* Actions strip */}
         <div className={`flex items-center justify-around border-t border-zinc-800 pt-3 ${hasImage ? "relative z-10" : ""}`}>
+          {showAddSource && (
+            <button
+              onClick={handleAddSource}
+              disabled={adding || added}
+              className={`flex items-center gap-1 py-1 px-3 rounded-lg transition-colors active:scale-95 ${
+                added ? "text-green-400" : "text-zinc-400 hover:bg-zinc-800/50"
+              }`}
+            >
+              {added ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+              )}
+              <span className="text-xs font-medium">{added ? "Added" : "Save"}</span>
+            </button>
+          )}
           <button onClick={() => handleVote(1)} className={`flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 ${vote === 1 ? "text-green-400" : "text-zinc-400"}`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill={vote === 1 ? "#4ade80" : "none"} stroke="currentColor" strokeWidth="2"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>
             <span className="text-xs font-medium">{upCount}</span>
