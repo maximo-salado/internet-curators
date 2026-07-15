@@ -200,7 +200,12 @@ export async function GET(req: Request) {
 }
 
 // Triggered by a cron job or manual call to refresh stale RSS sources into the articles cache.
-export async function POST() {
+// Requires CRON_SECRET header to prevent unauthorized triggering.
+export async function POST(req: Request) {
+  const authHeader = req.headers.get("authorization");
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const supabase = await createClient();
 
   const { data: sources, error } = await supabase
