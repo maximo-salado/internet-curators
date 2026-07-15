@@ -1,7 +1,10 @@
 // @ts-nocheck — Supabase nested join types don't match runtime
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { NextResponse } from "next/server";
 import Parser from "rss-parser";
+
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 interface FeedItem {
   title: string;
@@ -17,11 +20,12 @@ interface FeedItem {
 
 export async function GET(req: Request) {
   const supabase = await createClient();
+  const serviceClient = createServiceClient();
   const { searchParams } = new URL(req.url);
   const sort = searchParams.get("sort") ?? "latest";
 
-  // "Your Feed" mode: filter to user's own sources + followed curators' published
-  const feedMode = searchParams.get("feed"); // "your" or undefined (global)
+  // "Your Feed" mode
+  const feedMode = searchParams.get("feed");
   let userCuratorId: string | null = null;
   let followedIds: string[] = [];
 
@@ -35,31 +39,27 @@ export async function GET(req: Request) {
         .single();
       if (curator) userCuratorId = curator.id;
     }
-    // followedIds come from client localStorage, passed as query param
     followedIds = searchParams.get("followed")?.split(",").filter(Boolean) ?? [];
   }
 
+  // 1. Get all sources with curator info
   const { data: sources, error } = await supabase
     .from("sources")
-    .select("id, feed_url, title, site_url, collection_id, collections(curator_id, published, curators(display_name, id))");
+    .select("id, feed_url, title, site_url, last_fetched_at, collection_id, collections(curator_id, published, curators(display_name, id))");
 
   if (error || !sources?.length) return NextResponse.json([]);
 
-  // Map curator_id -> published for quick lookup
-  const curatorPublished = new Map<string, boolean>();
-  for (const s of sources) {
-    const cid = s.collections?.curator_id;
-    if (cid) {
-      const current = curatorPublished.get(cid) ?? false;
-      curatorPublished.set(cid, current || (s.collections?.published ?? false));
-    }
-  }
-
+  // 2. Refresh stale sources
+  const now = Date.now();
   const parser = new Parser();
-  const allItems: (FeedItem & { publishedCurators: Set<string> })[] = [];
 
   await Promise.all(
     sources.map(async (source) => {
+      const lastFetch = source.last_fetched_at
+        ? new Date(source.last_fetched_at).getTime()
+        : 0;
+      if (now - lastFetch < CACHE_TTL) return; // cache is fresh
+
       try {
         const feed = await new Promise<any>((resolve, reject) => {
           const timer = setTimeout(() => reject(new Error("timeout")), 8000);
@@ -68,61 +68,122 @@ export async function GET(req: Request) {
             (err) => { clearTimeout(timer); reject(err); }
           );
         });
-        const curatorName = source.collections?.curators?.display_name ?? "Unknown";
-        const curatorId = source.collections?.curator_id ?? null;
-        const isPublished = source.collections?.published ?? false;
 
+        // Upsert each article
         for (const item of feed.items ?? []) {
           const img =
             item.enclosure?.url && item.enclosure?.type?.startsWith("image/")
               ? item.enclosure.url
-              : (item as any)["media:content"]?.$.url || (item as any)["media:thumbnail"]?.$.url || undefined;
+              : (item as any)["media:content"]?.$.url
+                || (item as any)["media:thumbnail"]?.$.url
+                || undefined;
 
-          allItems.push({
+          const article = {
+            source_id: source.id,
             title: item.title ?? "Untitled",
             link: item.link ?? "",
-            pubDate: item.pubDate ?? item.isoDate ?? new Date().toISOString(),
-            sourceTitle: source.title || feed.title || source.feed_url,
-            sourceUrl: source.site_url || feed.link || "",
-            curatorNames: [curatorName],
-            curatorIds: curatorId ? [curatorId] : [],
-            contentSnippet: (item.contentSnippet ?? "").slice(0, 300),
-            content: (item as any)["content:encoded"] || item.content || (item.contentSnippet ?? ""),
-            publishedCurators: new Set(isPublished && curatorId ? [curatorId] : []),
-            ...(img ? { image: img } : {}),
+            pub_date: item.pubDate ?? item.isoDate ?? new Date().toISOString(),
+            content_snippet: (item.contentSnippet ?? "").slice(0, 500),
+            content: (item as any)["content:encoded"] || item.content || item.contentSnippet || "",
+            image: img ?? null,
+          };
+
+          if (!article.link) continue;
+
+          await serviceClient.from("articles").upsert(article, {
+            onConflict: "source_id,link",
+            ignoreDuplicates: false,
           });
         }
-      } catch {}
+
+        // Update last_fetched_at
+        await serviceClient
+          .from("sources")
+          .update({ last_fetched_at: new Date().toISOString() })
+          .eq("id", source.id);
+      } catch {
+        // Mark as fetched anyway to avoid retrying dead feeds on every request
+        await serviceClient
+          .from("sources")
+          .update({ last_fetched_at: new Date().toISOString() })
+          .eq("id", source.id);
+      }
     })
   );
 
-  // Deduplicate by link
+  // 3. Read articles from DB, joined through to curator info
+  const sourceIds = sources.map((s) => s.id);
+
+  let query = supabase
+    .from("articles")
+    .select(`
+      title, link, pub_date, content_snippet, image,
+      sources!inner(title, site_url, collection_id,
+        collections!inner(curator_id, published,
+          curators!inner(display_name, id)
+        )
+      )
+    `)
+    .in("source_id", sourceIds)
+    .order("pub_date", { ascending: false })
+    .limit(200);
+
+  const { data: articles } = await query;
+  if (!articles?.length) return NextResponse.json([]);
+
+  // 4. Deduplicate by link, merge curator names
   const seen = new Map<string, FeedItem & { publishedCurators: Set<string> }>();
-  for (const item of allItems) {
-    const existing = seen.get(item.link);
+
+  for (const a of articles) {
+    const s = a.sources as any;
+    const c = s?.collections as any;
+    const cu = c?.curators as any;
+    const curatorName = cu?.display_name ?? "Unknown";
+    const curatorId = cu?.id ?? null;
+    const isPublished = c?.published ?? false;
+    const link = a.link;
+
+    const existing = seen.get(link);
     if (existing) {
-      existing.curatorNames = [...new Set([...existing.curatorNames, ...item.curatorNames])];
-      existing.curatorIds = [...new Set([...existing.curatorIds, ...item.curatorIds])];
-      item.publishedCurators.forEach((id) => existing.publishedCurators.add(id));
+      if (curatorName !== "Unknown") {
+        existing.curatorNames = [...new Set([...existing.curatorNames, curatorName])];
+      }
+      if (curatorId) {
+        existing.curatorIds = [...new Set([...existing.curatorIds, curatorId])];
+      }
+      if (isPublished && curatorId) {
+        existing.publishedCurators.add(curatorId);
+      }
     } else {
-      seen.set(item.link, { ...item });
+      seen.set(link, {
+        title: a.title,
+        link,
+        pubDate: a.pub_date,
+        sourceTitle: s?.title || "Unknown",
+        sourceUrl: s?.site_url || "",
+        curatorNames: curatorName !== "Unknown" ? [curatorName] : [],
+        curatorIds: curatorId ? [curatorId] : [],
+        contentSnippet: a.content_snippet ?? "",
+        image: a.image ?? undefined,
+        publishedCurators: new Set(
+          isPublished && curatorId ? [curatorId] : []
+        ),
+      });
     }
   }
 
   let items = Array.from(seen.values());
 
-  // "Your Feed" filter (server-side)
+  // 5. "Your Feed" filter
   if (feedMode === "your" && userCuratorId) {
     items = items.filter((item) => {
-      // Always include: articles from user's own sources
       if (item.curatorIds.includes(userCuratorId)) return true;
-      // Include: published articles from followed curators
       return item.publishedCurators.size > 0 &&
         item.curatorIds.some((id) => followedIds.includes(id));
     });
   }
 
-  // Strip curator names from private-only articles (two-tier attribution)
+  // 6. Two-tier attribution: strip names from private-only articles
   items = items.map(({ publishedCurators, ...item }) => {
     if (publishedCurators.size === 0) {
       return { ...item, curatorNames: [] as string[] };
@@ -130,13 +191,14 @@ export async function GET(req: Request) {
     return item;
   });
 
+  // 7. Sort
   if (sort === "popular") {
     items.sort((a, b) => b.curatorNames.length - a.curatorNames.length);
   } else {
     items.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
   }
 
-  // Attach vote counts
+  // 8. Attach vote counts
   const sliced = items.slice(0, 50);
   const links = sliced.map((i) => i.link);
   const { data: votes } = await supabase
