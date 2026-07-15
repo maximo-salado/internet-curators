@@ -3,6 +3,9 @@ import { ensureCurator, generateSlug } from "@/lib/db-helpers";
 import { validateFeedUrl } from "@/lib/url-validator";
 import { NextResponse } from "next/server";
 
+const MAX_FILE_SIZE = 1_000_000; // 1 MB
+const MAX_FEEDS_PER_IMPORT = 500;
+
 export async function POST(req: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -12,6 +15,10 @@ export async function POST(req: Request) {
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
 
+  if (file.size > MAX_FILE_SIZE) {
+    return NextResponse.json({ error: "File too large (max 1 MB)" }, { status: 400 });
+  }
+
   const text = await file.text();
   if (!text.trim()) return NextResponse.json({ error: "Empty file" }, { status: 400 });
 
@@ -20,6 +27,13 @@ export async function POST(req: Request) {
 
   if (allFeeds.length === 0) {
     return NextResponse.json({ error: "No RSS feeds found in file" }, { status: 400 });
+  }
+
+  if (allFeeds.length > MAX_FEEDS_PER_IMPORT) {
+    return NextResponse.json(
+      { error: `Too many feeds (max ${MAX_FEEDS_PER_IMPORT} per import)` },
+      { status: 400 }
+    );
   }
 
   const displayName = user.email?.split("@")[0] ?? "Curator";

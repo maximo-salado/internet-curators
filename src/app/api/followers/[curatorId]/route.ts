@@ -7,25 +7,8 @@ export async function POST(
 ) {
   const { curatorId } = await params;
   const supabase = await createClient();
-
-  // Upsert follower count
-  const { data: existing } = await supabase
-    .from("follower_counts")
-    .select("count")
-    .eq("curator_id", curatorId)
-    .single();
-
-  if (existing) {
-    await supabase
-      .from("follower_counts")
-      .update({ count: existing.count + 1 })
-      .eq("curator_id", curatorId);
-  } else {
-    await supabase
-      .from("follower_counts")
-      .insert({ curator_id: curatorId, count: 1 });
-  }
-
+  // Atomic upsert+increment — avoids read-then-write race
+  await supabase.rpc("increment_follower_count", { p_curator_id: curatorId });
   return NextResponse.json({ success: true });
 }
 
@@ -35,19 +18,7 @@ export async function DELETE(
 ) {
   const { curatorId } = await params;
   const supabase = await createClient();
-
-  const { data: existing } = await supabase
-    .from("follower_counts")
-    .select("count")
-    .eq("curator_id", curatorId)
-    .single();
-
-  if (existing && existing.count > 0) {
-    await supabase
-      .from("follower_counts")
-      .update({ count: existing.count - 1 })
-      .eq("curator_id", curatorId);
-  }
-
+  // Atomic decrement clamped to 0 in DB function
+  await supabase.rpc("decrement_follower_count", { p_curator_id: curatorId });
   return NextResponse.json({ success: true });
 }
