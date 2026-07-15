@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import Parser from "rss-parser";
+
+export const revalidate = 300; // 5-minute ISR — reads from articles cache, no live RSS fetches
 
 export default async function CollectionPage({
   params,
@@ -23,14 +24,17 @@ export default async function CollectionPage({
   const curatorName = (collection as any).curators?.display_name ?? "Unknown";
   const curatorId = (collection as any).curators?.id;
 
-  // Fetch and parse sources for this collection
+  // Fetch source IDs for this collection
   const { data: sources } = await supabase
     .from("sources")
-    .select("feed_url, title, site_url")
+    .select("id, title")
     .eq("collection_id", collection.id);
 
-  const parser = new Parser();
-  const articles: Array<{
+  const sourceIds = (sources ?? []).map((s) => s.id);
+
+  // Read from the articles cache instead of fetching RSS live
+  const seen = new Set<string>();
+  const items: Array<{
     title: string;
     link: string;
     pubDate: string;
@@ -38,35 +42,26 @@ export default async function CollectionPage({
     contentSnippet: string;
   }> = [];
 
-  if (sources) {
-    await Promise.all(
-      sources.map(async (source) => {
-        try {
-          const feed = await parser.parseURL(source.feed_url);
-          for (const item of feed.items ?? []) {
-            articles.push({
-              title: item.title ?? "Untitled",
-              link: item.link ?? "",
-              pubDate: item.pubDate ?? item.isoDate ?? new Date().toISOString(),
-              sourceTitle: source.title || feed.title || source.feed_url,
-              contentSnippet: (item.contentSnippet ?? "").slice(0, 300),
-            });
-          }
-        } catch {}
-      })
-    );
-  }
+  if (sourceIds.length > 0) {
+    const { data: articles } = await supabase
+      .from("articles")
+      .select("title, link, pub_date, content_snippet, sources!inner(title)")
+      .in("source_id", sourceIds)
+      .order("pub_date", { ascending: false })
+      .limit(50);
 
-  // Deduplicate and sort
-  const seen = new Set<string>();
-  const items = articles
-    .filter((a) => {
-      if (seen.has(a.link)) return false;
+    for (const a of articles ?? []) {
+      if (!a.link || seen.has(a.link)) continue;
       seen.add(a.link);
-      return true;
-    })
-    .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
-    .slice(0, 50);
+      items.push({
+        title: a.title,
+        link: a.link,
+        pubDate: a.pub_date,
+        sourceTitle: (a.sources as any)?.title || "Unknown",
+        contentSnippet: (a.content_snippet ?? "").slice(0, 300),
+      });
+    }
+  }
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
