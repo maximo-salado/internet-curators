@@ -39,6 +39,8 @@ export async function GET(req: Request) {
       if (curator) userCuratorId = curator.id;
     }
     if (feedMode === "your") {
+      // POC-only: followedIds are passed from the client via query params.
+      // In production, follow relationships should be stored server-side.
       followedIds = searchParams.get("followed")?.split(",").filter(Boolean) ?? [];
     }
     if (feedMode === "discover" && userCuratorId) {

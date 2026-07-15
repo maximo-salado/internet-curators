@@ -32,13 +32,6 @@ export async function generateSlug(name: string): Promise<string> {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  // Append short random suffix if needed
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("collections")
-    .select("id")
-    .eq("slug", slug)
-    .single();
-  if (!data) return slug;
-  return `${slug}-${crypto.randomUUID().slice(0, 4)}`;
+  // Rely on the DB unique constraint on slug; callers should catch and retry on conflict.
+  return slug;
 }

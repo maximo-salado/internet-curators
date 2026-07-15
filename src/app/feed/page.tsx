@@ -48,22 +48,24 @@ export default function FeedPage() {
 
   const syncLocal = useCallback(() => setLocal(readLocalStorage()), []);
 
+  const onFollowedUpdated = useCallback(() => {
+    syncLocal();
+    setFollowedIds(JSON.parse(localStorage.getItem("ic:followed") ?? "[]"));
+  }, [syncLocal]);
+
   useEffect(() => {
     syncLocal();
     window.addEventListener("ic:votes-updated", syncLocal);
     window.addEventListener("ic:hidden-updated", syncLocal);
     window.addEventListener("ic:removedSources-updated", syncLocal);
-    window.addEventListener("ic:followed-updated", syncLocal);
-    window.addEventListener("ic:followed-updated", () => {
-      setFollowedIds(JSON.parse(localStorage.getItem("ic:followed") ?? "[]"));
-    });
+    window.addEventListener("ic:followed-updated", onFollowedUpdated);
     return () => {
       window.removeEventListener("ic:votes-updated", syncLocal);
       window.removeEventListener("ic:hidden-updated", syncLocal);
       window.removeEventListener("ic:removedSources-updated", syncLocal);
-      window.removeEventListener("ic:followed-updated", syncLocal);
+      window.removeEventListener("ic:followed-updated", onFollowedUpdated);
     };
-  }, [syncLocal]);
+  }, [syncLocal, onFollowedUpdated]);
 
   useEffect(() => {
     setLoading(true);

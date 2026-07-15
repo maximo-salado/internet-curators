@@ -9,6 +9,7 @@ export async function POST(req: Request) {
 
   const { name, description = "", published = false } = await req.json();
   if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
+  if (typeof published !== "boolean") return NextResponse.json({ error: "published must be a boolean" }, { status: 400 });
 
   const displayName = user.email?.split("@")[0] ?? "Curator";
   const curator = await ensureCurator(user.id, displayName);
