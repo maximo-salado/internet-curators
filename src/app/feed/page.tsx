@@ -71,6 +71,8 @@ export default function FeedPage() {
     if (tab === "your") {
       params.set("feed", "your");
       params.set("followed", followedIds.join(","));
+    } else {
+      params.set("feed", "discover");
     }
     fetch(`/api/feed?${params}`)
       .then((r) => r.json())
@@ -148,6 +150,7 @@ export default function FeedPage() {
               }}
               hidden={false}
               vote={local.votes[item.link] ?? 0}
+              showAddSource={tab !== "your"}
             />
           ))}
         </div>
