@@ -7,9 +7,12 @@ Every commit and PR on this project is co-created with AI agents. We use `Co-aut
 ```
 <type>: <description>
 
-Agent: <role> — <model>
+Agent: <role> [— <model>]
+Review: <agent> [— <model>] (optional)
 Co-authored-by: <name> <<email>>
 ```
+
+Multiple agents use separate `Agent:` lines or combine with `+`.
 
 ## Agents
 
@@ -17,7 +20,7 @@ Co-authored-by: <name> <<email>>
 |------|------|-------|-------|
 | Orchestration | Hermes | hermes@nousresearch.com | deepseek-v4-pro |
 | Code | OpenCode | opencode@opencode.ai | opencode-go/deepseek-v4-flash |
-| Audit | Claude | claude@anthropic.com | claude-sonnet-4 |
+| Audit | Claude | noreply@anthropic.com | claude-sonnet-4-6 |
 
 ## Examples
 
@@ -25,10 +28,10 @@ Co-authored-by: <name> <<email>>
 git commit -m "feat: Discover/Feed pipeline
 
 Agent: hermes + opencode-go/deepseek-v4-flash
-Review: claude-sonnet-4
+Review: claude-sonnet-4-6
 Co-authored-by: Hermes <hermes@nousresearch.com>
 Co-authored-by: OpenCode <opencode@opencode.ai>
-Co-authored-by: Claude <claude@anthropic.com>"
+Co-authored-by: Claude <noreply@anthropic.com>"
 ```
 
 ## PR Format
