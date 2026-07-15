@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 interface FeedItem {
   title: string;
@@ -11,6 +12,7 @@ interface FeedItem {
   curatorNames: string[];
   curatorIds: string[];
   contentSnippet: string;
+  content?: string;
   image?: string;
   upvotes?: number;
   downvotes?: number;
@@ -27,8 +29,28 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote }: ArticleCardP
   const [confirming, setConfirming] = useState<"hide" | "remove" | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  const router = useRouter();
   const [upCount, setUpCount] = useState(item.upvotes ?? 0);
   const [downCount, setDownCount] = useState(item.downvotes ?? 0);
+  const [read, setRead] = useState(false);
+
+  // Check if already read on mount
+  useEffect(() => {
+    const readLinks: string[] = JSON.parse(localStorage.getItem("ic:read") ?? "[]");
+    if (readLinks.includes(item.link)) setRead(true);
+  }, [item.link]);
+
+  function markRead() {
+    if (read) return;
+    setRead(true);
+    const readLinks: string[] = JSON.parse(localStorage.getItem("ic:read") ?? "[]");
+    if (!readLinks.includes(item.link)) {
+      readLinks.push(item.link);
+      if (readLinks.length > 1000) readLinks.splice(0, readLinks.length - 1000);
+      localStorage.setItem("ic:read", JSON.stringify(readLinks));
+    }
+  }
 
   // Sync with server counts when feed reloads
   useEffect(() => {
@@ -87,7 +109,12 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote }: ArticleCardP
   const hasImage = !!item.image;
 
   return (
-    <article className={`rounded-xl overflow-hidden ${hasImage ? "relative h-80" : "bg-zinc-900 px-4 py-5"}`}>
+    <article ref={cardRef} className={`rounded-xl overflow-hidden relative ${hasImage ? "h-80" : "bg-zinc-900 px-4 py-5"}`}>
+      {read && (
+        <div className="absolute top-3 right-3 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800/80">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+      )}
       {hasImage && (
         <>
           <img
@@ -110,11 +137,27 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote }: ArticleCardP
 
         {/* Title + snippet — middle */}
         <div className={hasImage ? "mt-auto" : "mt-3"}>
-          <a href={item.link} target="_blank" rel="noopener noreferrer" className="block">
+          <button
+            onClick={() => {
+              markRead();
+              const params = new URLSearchParams({
+                title: item.title,
+                link: item.link,
+                source: item.sourceTitle,
+                date: item.pubDate,
+                upvotes: String(upCount),
+                downvotes: String(downCount),
+                ...(item.content ? { content: item.content } : { snippet: item.contentSnippet }),
+                ...(item.image ? { image: item.image } : {}),
+              });
+              router.push(`/reader?${params.toString()}`);
+            }}
+            className="block text-left w-full"
+          >
             <h2 className={`font-semibold leading-snug ${hasImage ? "text-white text-lg" : "text-zinc-100"}`}>
               {item.title}
             </h2>
-          </a>
+          </button>
           {item.contentSnippet && (
             <p className={`mt-1.5 text-sm line-clamp-2 ${hasImage ? "text-white/70" : "text-zinc-500"}`}>
               {item.contentSnippet}

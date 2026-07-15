@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [importStatus, setImportStatus] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -70,17 +71,52 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportStatus("Importing...");
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/import", { method: "POST", body: formData });
+    const data = await res.json();
+    if (res.ok) {
+      setImportStatus(`Imported ${data.imported} feeds${data.skipped ? ` (${data.skipped} skipped)` : ""}`);
+      fetch("/api/collections").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setCollections(d); });
+    } else {
+      setImportStatus(data.error || "Import failed");
+    }
+    e.target.value = "";
+  }
+
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-200 transition-colors"
-        >
-          {showForm ? "Cancel" : "New Collection"}
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="cursor-pointer rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:border-zinc-500 transition-colors">
+            Import OPML
+            <input type="file" accept=".opml,.xml" onChange={handleImport} className="hidden" />
+          </label>
+          <a
+            href="/api/export"
+            className="rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:border-zinc-500 transition-colors"
+          >
+            Export OPML
+          </a>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-200 transition-colors"
+          >
+            {showForm ? "Cancel" : "New Collection"}
+          </button>
+        </div>
       </div>
+
+      {importStatus && (
+        <div className="mb-6 rounded-md border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-400">
+          {importStatus}
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={createCollection} className="mb-8 rounded-lg border border-zinc-800 bg-zinc-900 p-6">
