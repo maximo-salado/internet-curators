@@ -9,6 +9,15 @@ Curators replace the algorithm. Follow people whose taste you trust, scroll an I
 1. **Curators** add RSS feeds to collections — blogs, news sites, anything with RSS
 2. **Followers** scroll a familiar vertical feed of articles from curators they trust
 3. **You moderate** — vote up, vote down, hide, remove sources. You shape your feed
+4. **Publish when ready** — collections are private by default. Publish to share with followers
+5. **Subscribe via RSS** — every published collection generates its own RSS feed
+
+## Privacy by design
+
+- Private collections: your reading data stays yours. Articles appear in the feed anonymously ("Trending") until you publish
+- Public collections: you explicitly choose what to share. Curator credit only attached when you opt in
+- Local storage: follows, votes, preferences never leave your device
+- No tracking, no user data on any server
 
 ## Stack
 
@@ -16,15 +25,19 @@ Next.js 16 · TypeScript · Tailwind CSS · Supabase (auth + database) · RSS Pa
 
 ## POC Status
 
-Phases 1-7 complete. Live demo coming soon.
+All phases complete. Deployed at [internet-curators.vercel.app](https://internet-curators.vercel.app).
 
 - [x] Auth (email/password)
 - [x] Database (curators, collections, sources)
-- [x] Curator dashboard (create collections, add RSS sources)
+- [x] Curator dashboard (create collections, add RSS sources, publish/draft toggle)
 - [x] RSS pipeline (fetch, parse, deduplicate, merge)
 - [x] Visitor homepage (feed + popular curators + search)
 - [x] Follow system + voting
-- [ ] Deploy to Vercel
+- [x] Private/public collections with two-tier feed attribution
+- [x] Collection RSS output (published collections generate subscribable feeds)
+- [x] Search (curator and collection search with tabbed suggestions)
+- [x] Public curator profiles and collection pages
+- [x] Deploy to Vercel
 
 ## Setup
 
@@ -35,13 +48,7 @@ cp .env.local.example .env.local
 npm run dev
 ```
 
-Run the migration in `supabase/migrations/001_schema.sql` in your Supabase SQL Editor.
-
-## Privacy
-
-- Public data (Supabase): curator profiles, collections, RSS sources, follower counts (number only)
-- Private data (localStorage, never leaves your device): follows, votes, preferences
-- No user data on any server, ever
+Run migrations in `supabase/migrations/` in your Supabase SQL Editor (001, 002, 003).
 
 ## License
 
