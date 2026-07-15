@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useAuth } from "@/hooks/useAuth";
+import { useSearchParams } from "next/navigation";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CuratorStories } from "@/components/CuratorStories";
+import { getSeenSources, saveSeenSources, boostUnseen } from "@/lib/feed-rotation";
 
 interface FeedItem {
   title: string;
@@ -24,6 +24,8 @@ interface FeedItem {
 type Sort = "latest" | "popular";
 type Tab = "feed" | "your";
 
+const PAGE_SIZE = 20;
+
 function readLocalStorage() {
   return {
     followedIds: JSON.parse(localStorage.getItem("ic:followed") ?? "[]") as string[],
@@ -34,13 +36,15 @@ function readLocalStorage() {
 }
 
 export default function FeedPage() {
-  const { user } = useAuth();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const tab = (searchParams.get("tab") as Tab) || "feed";
   const [sort, setSort] = useState<Sort>("latest");
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const [local, setLocal] = useState(() => (typeof window !== "undefined" ? readLocalStorage() : { followedIds: [], votes: {}, hiddenLinks: [], removedSources: [] }));
   const [followedIds, setFollowedIds] = useState<string[]>(
     typeof window !== "undefined" ? JSON.parse(localStorage.getItem("ic:followed") ?? "[]") : []
@@ -67,7 +71,12 @@ export default function FeedPage() {
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({ sort });
+    setItems([]);
+    setOffset(0);
+    setHasMore(true);
+    setTotal(0);
+
+    const params = new URLSearchParams({ sort, offset: "0", limit: String(PAGE_SIZE) });
     if (tab === "your") {
       params.set("feed", "your");
       params.set("followed", followedIds.join(","));
@@ -76,9 +85,60 @@ export default function FeedPage() {
     }
     fetch(`/api/feed?${params}`)
       .then((r) => r.json())
-      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const pageItems: FeedItem[] = data.items ?? [];
+        const seen = getSeenSources();
+        const boosted = boostUnseen(pageItems, seen);
+        setItems(boosted);
+        setTotal(data.total ?? 0);
+        setHasMore(data.hasMore ?? false);
+        setOffset(PAGE_SIZE);
+      })
       .finally(() => setLoading(false));
   }, [tab, sort, followedIds]);
+
+  // Save seen sources on unmount or tab switch
+  useEffect(() => {
+    return () => {
+      const sourceTitles = items.map((i) => i.sourceTitle);
+      if (sourceTitles.length > 0) saveSeenSources(sourceTitles);
+    };
+  }, [items]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden" && items.length > 0) {
+        saveSeenSources(items.map((i) => i.sourceTitle));
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [items]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+
+    const params = new URLSearchParams({ sort, offset: String(offset), limit: String(PAGE_SIZE) });
+    if (tab === "your") {
+      params.set("feed", "your");
+      params.set("followed", followedIds.join(","));
+    } else {
+      params.set("feed", "discover");
+    }
+    fetch(`/api/feed?${params}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const pageItems: FeedItem[] = data.items ?? [];
+        const seen = getSeenSources();
+        const boosted = boostUnseen(pageItems, seen);
+        setItems((prev) => [...prev, ...boosted]);
+        setTotal(data.total ?? 0);
+        setHasMore(data.hasMore ?? false);
+        setOffset((prev) => prev + PAGE_SIZE);
+      })
+      .finally(() => setLoadingMore(false));
+  }, [loadingMore, hasMore, offset, sort, tab, followedIds]);
 
   const filteredItems = useMemo(() => {
     let result = items
@@ -153,6 +213,23 @@ export default function FeedPage() {
               showAddSource={tab !== "your"}
             />
           ))}
+
+          <div className="py-6 text-center">
+            <p className="text-xs text-zinc-600 mb-3">
+              Showing {filteredItems.length} of {total} articles
+            </p>
+            {hasMore ? (
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="rounded-lg border border-zinc-800 bg-zinc-900 px-6 py-2 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-50"
+              >
+                {loadingMore ? "Loading..." : "Load More"}
+              </button>
+            ) : (
+              <p className="text-sm text-zinc-500">You are all caught up!</p>
+            )}
+          </div>
         </div>
       )}
     </main>

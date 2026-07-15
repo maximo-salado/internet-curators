@@ -31,6 +31,8 @@ export async function GET(req: Request) {
   const serviceClient = createServiceClient();
   const { searchParams } = new URL(req.url);
   const sort = searchParams.get("sort") ?? "latest";
+  const offset = Math.max(0, parseInt(searchParams.get("offset") ?? "0", 10) || 0);
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20));
 
   // "Your Feed" mode — only user's own sources + followed
   // "Discover" mode — everything EXCEPT user's own sources
@@ -67,7 +69,7 @@ export async function GET(req: Request) {
     .from("sources")
     .select("id, feed_url, title, site_url, last_fetched_at, collection_id, collections(curator_id, published, curators(display_name, id))");
 
-  if (error || !sources?.length) return NextResponse.json([]);
+  if (error || !sources?.length) return NextResponse.json({ items: [], total: 0, hasMore: false });
 
   // 2. Refresh stale sources
   const now = Date.now();
@@ -141,7 +143,7 @@ export async function GET(req: Request) {
   if (excludeUserSourceIds && excludeUserSourceIds.length > 0) {
     sourceIds = sourceIds.filter((id) => !excludeUserSourceIds!.includes(id));
   }
-  if (sourceIds.length === 0) return NextResponse.json([]);
+  if (sourceIds.length === 0) return NextResponse.json({ items: [], total: 0, hasMore: false });
 
   let query = supabase
     .from("articles")
@@ -158,7 +160,7 @@ export async function GET(req: Request) {
     .limit(200);
 
   const { data: articles } = await query;
-  if (!articles?.length) return NextResponse.json([]);
+  if (!articles?.length) return NextResponse.json({ items: [], total: 0, hasMore: false });
 
   // 4. Deduplicate by link, merge curator names
   const seen = new Map<string, FeedItem & { publishedCurators: Set<string> }>();
@@ -208,7 +210,7 @@ export async function GET(req: Request) {
   // 5. "Your Feed" filter — only user's own sources + followed
   if (feedMode === "your") {
     if (!userCuratorId) {
-      return NextResponse.json([]);
+      return NextResponse.json({ items: [], total: 0, hasMore: false });
     }
     items = items.filter((item) => {
       if (item.curatorIds.includes(userCuratorId)) return true;
@@ -254,9 +256,11 @@ export async function GET(req: Request) {
     idx++;
   }
 
-  // 8. Attach vote counts
-  const sliced = items.slice(0, 50);
-  const links = sliced.map((i) => i.link);
+  // 8. Attach vote counts (fetch for the requested page only)
+  const total = items.length;
+  const page = items.slice(offset, offset + limit);
+  const hasMore = offset + limit < total;
+  const links = page.map((i) => i.link);
   const { data: votes } = await supabase
     .from("article_votes")
     .select("link, upvotes, downvotes")
@@ -267,11 +271,11 @@ export async function GET(req: Request) {
     voteMap.set(v.link, { upvotes: v.upvotes, downvotes: v.downvotes });
   }
 
-  const withVotes = sliced.map((item) => ({
+  const withVotes = page.map((item) => ({
     ...item,
     upvotes: voteMap.get(item.link)?.upvotes ?? 0,
     downvotes: voteMap.get(item.link)?.downvotes ?? 0,
   }));
 
-  return NextResponse.json(withVotes);
+  return NextResponse.json({ items: withVotes, total, hasMore });
 }
