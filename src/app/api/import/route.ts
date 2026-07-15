@@ -97,6 +97,13 @@ export async function POST(req: Request) {
 
     if (!collectionId) continue;
 
+    const rows: Array<{
+      collection_id: string;
+      feed_url: string;
+      title: string;
+      site_url: string;
+    }> = [];
+
     for (const feed of folderFeeds) {
       if (existingUrls.has(feed.xmlUrl)) {
         skipped++;
@@ -109,7 +116,7 @@ export async function POST(req: Request) {
         continue;
       }
 
-      await supabase.from("sources").insert({
+      rows.push({
         collection_id: collectionId,
         feed_url: feed.xmlUrl,
         title: feed.title,
@@ -117,7 +124,11 @@ export async function POST(req: Request) {
       });
 
       existingUrls.add(feed.xmlUrl);
-      imported++;
+    }
+
+    if (rows.length > 0) {
+      await supabase.from("sources").insert(rows);
+      imported += rows.length;
     }
   }
 

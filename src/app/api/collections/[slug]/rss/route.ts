@@ -57,7 +57,9 @@ export async function GET(
             sourceTitle: source.title || feed.title || source.feed_url,
           });
         }
-      } catch {}
+      } catch (error) {
+          console.error(source.feed_url, error);
+        }
     })
   );
 

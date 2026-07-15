@@ -230,7 +230,7 @@ function HiddenItems() {
           <div className="flex flex-wrap gap-2">
             {hidden.map((link) => (
               <button key={link} onClick={() => restoreHidden(link)} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-colors">
-                {new URL(link).hostname}{new URL(link).pathname.slice(0, 20)} ↩
+                {(() => { try { const u = new URL(link); return u.hostname + u.pathname.slice(0, 20); } catch { return link.slice(0, 40); } })()} ↩
               </button>
             ))}
           </div>
