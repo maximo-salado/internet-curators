@@ -1,46 +1,48 @@
 # Agent Attribution Convention
 
-Every commit and PR on this project is co-created with AI agents. We use `Co-authored-by:` trailers for transparency.
+Every commit and PR on this project is co-created with AI agents. We note which agents were involved directly in the commit message.
 
 ## Commit Format
 
 ```
 <type>: <description>
 
-Agent: <role> [— <model>]
-Review: <agent> [— <model>] (optional)
-Co-authored-by: <name> <<email>>
+Agent: <agents>
+Review: <agent> (optional)
 ```
-
-Multiple agents use separate `Agent:` lines or combine with `+`.
 
 ## Agents
 
-| Role | Name | Email | Model |
-|------|------|-------|-------|
-| Orchestration | Hermes | hermes@nousresearch.com | deepseek-v4-pro |
-| Code | OpenCode | opencode@opencode.ai | opencode-go/deepseek-v4-flash |
-| Audit | Claude | noreply@anthropic.com | claude-sonnet-4-6 |
+| Role | Agent |
+|------|-------|
+| Orchestration | hermes |
+| Code | opencode |
+| Audit | claude |
 
 ## Examples
 
 ```bash
 git commit -m "feat: Discover/Feed pipeline
 
-Agent: hermes + opencode-go/deepseek-v4-flash
-Review: claude-sonnet-4-6
-Co-authored-by: Hermes <hermes@nousresearch.com>
-Co-authored-by: OpenCode <opencode@opencode.ai>
-Co-authored-by: Claude <noreply@anthropic.com>"
+Agent: hermes + opencode
+Review: claude"
+
+git commit -m "ci: add build check workflow
+
+Agent: hermes"
+
+git commit -m "fix: security audit — RLS, SSRF, vote inflation
+
+Agent: claude"
 ```
 
 ## PR Format
 
 ```markdown
 ## Agent Stack
-- **Orchestration:** Hermes (deepseek-v4-pro)
-- **Code:** OpenCode (opencode-go/deepseek-v4-flash)
-- **Review:** Claude (claude-sonnet-4)
+- **Orchestration:** hermes
+- **Code:** opencode
+- **Review:** claude
 ```
 
 ## Why
