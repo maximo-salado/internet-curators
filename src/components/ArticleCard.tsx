@@ -27,6 +27,14 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote }: ArticleCardP
   const [confirming, setConfirming] = useState<"hide" | "remove" | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [upCount, setUpCount] = useState(item.upvotes ?? 0);
+  const [downCount, setDownCount] = useState(item.downvotes ?? 0);
+
+  // Sync with server counts when feed reloads
+  useEffect(() => {
+    setUpCount(item.upvotes ?? 0);
+    setDownCount(item.downvotes ?? 0);
+  }, [item.upvotes, item.downvotes]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -38,13 +46,17 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote }: ArticleCardP
   }, [menuOpen]);
 
   if (hidden) return null;
-
   const handleVote = (dir: 1 | -1) => {
     const votes = JSON.parse(localStorage.getItem("ic:votes") ?? "{}") as Record<string, number>;
     const current = votes[item.link] ?? 0;
-    votes[item.link] = current === dir ? 0 : dir;
+    const next = current === dir ? 0 : dir;
+    votes[item.link] = next;
     localStorage.setItem("ic:votes", JSON.stringify(votes));
     window.dispatchEvent(new Event("ic:votes-updated"));
+
+    // Optimistic count update
+    if (dir === 1) setUpCount((c) => current === 1 ? c - 1 : c + 1);
+    else setDownCount((c) => current === -1 ? c - 1 : c + 1);
 
     fetch("/api/votes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ link: item.link, direction: dir }) }).catch(() => {});
   };
@@ -113,11 +125,11 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote }: ArticleCardP
         <div className={`flex items-center justify-around border-t border-zinc-800 pt-3 ${hasImage ? "relative z-10" : ""}`}>
           <button onClick={() => handleVote(1)} className={`flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 ${vote === 1 ? "text-green-400" : "text-zinc-400"}`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill={vote === 1 ? "#4ade80" : "none"} stroke="currentColor" strokeWidth="2"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>
-            <span className="text-xs font-medium">{item.upvotes ?? 0}</span>
+            <span className="text-xs font-medium">{upCount}</span>
           </button>
           <button onClick={() => handleVote(-1)} className={`flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 ${vote === -1 ? "text-red-400" : "text-zinc-400"}`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill={vote === -1 ? "#f87171" : "none"} stroke="currentColor" strokeWidth="2"><path d="M12 20l8-8h-5V4H9v8H4z"/></svg>
-            <span className="text-xs font-medium">{item.downvotes ?? 0}</span>
+            <span className="text-xs font-medium">{downCount}</span>
           </button>
           <button onClick={() => navigator.clipboard.writeText(item.link)} className="flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 text-zinc-400">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
