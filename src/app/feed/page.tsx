@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { CuratorCard } from "@/components/CuratorCard";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CuratorStories } from "@/components/CuratorStories";
 
@@ -22,15 +21,8 @@ interface FeedItem {
   downvotes?: number;
 }
 
-interface Curator {
-  id: string;
-  display_name: string;
-  bio: string;
-  follower_counts: { count: number } | null;
-}
-
 type Sort = "latest" | "popular";
-type Tab = "feed" | "your" | "curators";
+type Tab = "feed" | "your";
 
 function readLocalStorage() {
   return {
@@ -48,9 +40,11 @@ export default function FeedPage() {
   const tab = (searchParams.get("tab") as Tab) || "feed";
   const [sort, setSort] = useState<Sort>("latest");
   const [items, setItems] = useState<FeedItem[]>([]);
-  const [curators, setCurators] = useState<Curator[]>([]);
   const [loading, setLoading] = useState(true);
   const [local, setLocal] = useState(() => (typeof window !== "undefined" ? readLocalStorage() : { followedIds: [], votes: {}, hiddenLinks: [], removedSources: [] }));
+  const [followedIds, setFollowedIds] = useState<string[]>(
+    typeof window !== "undefined" ? JSON.parse(localStorage.getItem("ic:followed") ?? "[]") : []
+  );
 
   const syncLocal = useCallback(() => setLocal(readLocalStorage()), []);
 
@@ -60,6 +54,9 @@ export default function FeedPage() {
     window.addEventListener("ic:hidden-updated", syncLocal);
     window.addEventListener("ic:removedSources-updated", syncLocal);
     window.addEventListener("ic:followed-updated", syncLocal);
+    window.addEventListener("ic:followed-updated", () => {
+      setFollowedIds(JSON.parse(localStorage.getItem("ic:followed") ?? "[]"));
+    });
     return () => {
       window.removeEventListener("ic:votes-updated", syncLocal);
       window.removeEventListener("ic:hidden-updated", syncLocal);
@@ -70,23 +67,16 @@ export default function FeedPage() {
 
   useEffect(() => {
     setLoading(true);
-    if (tab === "curators") {
-      fetch("/api/curators")
-        .then((r) => r.json())
-        .then((data) => setCurators(Array.isArray(data) ? data : []))
-        .finally(() => setLoading(false));
-    } else {
-      const params = new URLSearchParams({ sort });
-      if (tab === "your") {
-        params.set("feed", "your");
-        params.set("followed", local.followedIds.join(","));
-      }
-      fetch(`/api/feed?${params}`)
-        .then((r) => r.json())
-        .then((data) => setItems(Array.isArray(data) ? data : []))
-        .finally(() => setLoading(false));
+    const params = new URLSearchParams({ sort });
+    if (tab === "your") {
+      params.set("feed", "your");
+      params.set("followed", followedIds.join(","));
     }
-  }, [tab, sort, local.followedIds]);
+    fetch(`/api/feed?${params}`)
+      .then((r) => r.json())
+      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .finally(() => setLoading(false));
+  }, [tab, sort, followedIds]);
 
   const filteredItems = useMemo(() => {
     let result = items
@@ -109,32 +99,25 @@ export default function FeedPage() {
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 py-4">
       <CuratorStories />
-      <div className="px-4 mt-4 mb-4 flex items-center justify-between">
-        <div className="flex gap-6">
-          <button onClick={() => router.push("/feed?tab=feed")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "feed" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Feed</button>
-          <button onClick={() => router.push("/feed?tab=your")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "your" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Your Feed</button>
-          <button onClick={() => router.push("/feed?tab=curators")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "curators" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Popular Curators</button>
-        </div>
-        {tab !== "curators" && (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                const links = items.map((i) => i.link);
-                const readLinks: string[] = JSON.parse(localStorage.getItem("ic:read") ?? "[]");
-                const merged = [...new Set([...readLinks, ...links])].slice(-1000);
-                localStorage.setItem("ic:read", JSON.stringify(merged));
-                window.dispatchEvent(new Event("ic:read-updated"));
-              }}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-            >
-              Mark all read
-            </button>
+      <div className="px-4 mt-4 mb-4 flex items-center justify-end">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              const links = items.map((i) => i.link);
+              const readLinks: string[] = JSON.parse(localStorage.getItem("ic:read") ?? "[]");
+              const merged = [...new Set([...readLinks, ...links])].slice(-1000);
+              localStorage.setItem("ic:read", JSON.stringify(merged));
+              window.dispatchEvent(new Event("ic:read-updated"));
+            }}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Mark all read
+          </button>
           <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 outline-none">
             <option value="latest">Latest</option>
             <option value="popular">Popular</option>
           </select>
-          </div>
-        )}
+        </div>
       </div>
 
       {loading ? (
@@ -147,18 +130,6 @@ export default function FeedPage() {
             </div>
           ))}
         </div>
-      ) : tab === "curators" ? (
-        curators.length === 0 ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-12 text-center">
-            <p className="text-zinc-400">No curators yet.</p>
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {curators.map((c) => (
-              <CuratorCard key={c.id} curator={c} isLoggedIn={!!user} />
-            ))}
-          </div>
-        )
       ) : filteredItems.length === 0 ? (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-12 text-center">
           <p className="text-zinc-400">No articles yet.</p>
