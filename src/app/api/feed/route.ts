@@ -18,6 +18,8 @@ interface FeedItem {
   pubDate: string;
   sourceTitle: string;
   sourceUrl: string;
+  sourceId: string;
+  feedUrl: string;
   curatorNames: string[];
   curatorIds: string[];
   contentSnippet: string;
@@ -30,12 +32,14 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const sort = searchParams.get("sort") ?? "latest";
 
-  // "Your Feed" mode
+  // "Your Feed" mode — only user's own sources + followed
+  // "Discover" mode — everything EXCEPT user's own sources
   const feedMode = searchParams.get("feed");
   let userCuratorId: string | null = null;
   let followedIds: string[] = [];
+  let excludeUserSourceIds: string[] | null = null;
 
-  if (feedMode === "your") {
+  if (feedMode === "your" || feedMode === "discover") {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: curator } = await supabase
@@ -45,7 +49,17 @@ export async function GET(req: Request) {
         .single();
       if (curator) userCuratorId = curator.id;
     }
-    followedIds = searchParams.get("followed")?.split(",").filter(Boolean) ?? [];
+    if (feedMode === "your") {
+      followedIds = searchParams.get("followed")?.split(",").filter(Boolean) ?? [];
+    }
+    if (feedMode === "discover" && userCuratorId) {
+      // Get all source IDs the user already has in their collections
+      const { data: userSources } = await supabase
+        .from("sources")
+        .select("id, collection_id, collections!inner(curator_id)")
+        .eq("collections.curator_id", userCuratorId);
+      excludeUserSourceIds = (userSources ?? []).map((s: any) => s.id);
+    }
   }
 
   // 1. Get all sources with curator info
@@ -121,13 +135,19 @@ export async function GET(req: Request) {
   );
 
   // 3. Read articles from DB, joined through to curator info
-  const sourceIds = sources.map((s) => s.id);
+  let sourceIds = sources.map((s) => s.id);
+
+  // Exclude user's own sources in Discover mode
+  if (excludeUserSourceIds && excludeUserSourceIds.length > 0) {
+    sourceIds = sourceIds.filter((id) => !excludeUserSourceIds!.includes(id));
+  }
+  if (sourceIds.length === 0) return NextResponse.json([]);
 
   let query = supabase
     .from("articles")
     .select(`
-      title, link, pub_date, content_snippet, image,
-      sources!inner(title, site_url, collection_id,
+      title, link, pub_date, content_snippet, image, source_id,
+      sources!inner(id, title, feed_url, site_url, collection_id,
         collections!inner(curator_id, published,
           curators!inner(display_name, id)
         )
@@ -170,6 +190,8 @@ export async function GET(req: Request) {
         pubDate: a.pub_date,
         sourceTitle: s?.title || "Unknown",
         sourceUrl: s?.site_url || "",
+        sourceId: a.source_id || s?.id || "",
+        feedUrl: s?.feed_url || "",
         curatorNames: curatorName !== "Unknown" ? [curatorName] : [],
         curatorIds: curatorId ? [curatorId] : [],
         contentSnippet: a.content_snippet ?? "",
@@ -183,8 +205,11 @@ export async function GET(req: Request) {
 
   let items = Array.from(seen.values());
 
-  // 5. "Your Feed" filter
-  if (feedMode === "your" && userCuratorId) {
+  // 5. "Your Feed" filter — only user's own sources + followed
+  if (feedMode === "your") {
+    if (!userCuratorId) {
+      return NextResponse.json([]);
+    }
     items = items.filter((item) => {
       if (item.curatorIds.includes(userCuratorId)) return true;
       return item.publishedCurators.size > 0 &&
