@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ensureCurator, generateSlug } from "@/lib/db-helpers";
+import { validateFeedUrl } from "@/lib/url-validator";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -84,6 +85,12 @@ export async function POST(req: Request) {
 
     for (const feed of folderFeeds) {
       if (existingUrls.has(feed.xmlUrl)) {
+        skipped++;
+        continue;
+      }
+
+      const urlCheck = await validateFeedUrl(feed.xmlUrl);
+      if (!urlCheck.valid) {
         skipped++;
         continue;
       }

@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+const VALID_VOTE = new Set([-1, 0, 1]);
+
 // POST — apply a vote transition (anonymous)
 // Body: { link, prev: 1|-1|0, next: 1|-1|0 }
 // prev = user's previous vote, next = user's new vote
@@ -12,29 +14,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "link, prev, and next required" }, { status: 400 });
   }
 
-  const { data: existing } = await supabase
-    .from("article_votes")
-    .select("upvotes, downvotes")
-    .eq("link", link)
-    .single();
-
-  let upvotes = existing?.upvotes ?? 0;
-  let downvotes = existing?.downvotes ?? 0;
-
-  // Undo previous vote
-  if (prev === 1) upvotes = Math.max(0, upvotes - 1);
-  if (prev === -1) downvotes = Math.max(0, downvotes - 1);
-  // Apply new vote
-  if (next === 1) upvotes++;
-  if (next === -1) downvotes++;
-
-  if (existing) {
-    await supabase.from("article_votes").update({ upvotes, downvotes }).eq("link", link);
-  } else {
-    await supabase.from("article_votes").insert({ link, upvotes, downvotes });
+  if (!VALID_VOTE.has(prev) || !VALID_VOTE.has(next)) {
+    return NextResponse.json({ error: "prev and next must be -1, 0, or 1" }, { status: 400 });
   }
 
-  return NextResponse.json({ success: true, upvotes, downvotes });
+  const { data, error } = await supabase.rpc("apply_vote", {
+    p_link: link,
+    p_prev: prev,
+    p_next: next,
+  });
+
+  if (error) {
+    if (error.message?.includes("article_not_found")) {
+      return NextResponse.json({ error: "Article not found" }, { status: 404 });
+    }
+    return NextResponse.json({ error: "Vote failed" }, { status: 500 });
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return NextResponse.json({
+    success: true,
+    upvotes: row?.upvotes ?? 0,
+    downvotes: row?.downvotes ?? 0,
+  });
 }
 
 export async function GET(req: Request) {

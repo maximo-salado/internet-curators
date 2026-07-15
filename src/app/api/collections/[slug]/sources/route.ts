@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { validateFeedUrl } from "@/lib/url-validator";
 import { NextResponse } from "next/server";
 
 export async function POST(
@@ -34,11 +35,9 @@ export async function POST(
   const { feed_url: feedUrl } = await req.json();
   if (!feedUrl) return NextResponse.json({ error: "feed_url is required" }, { status: 400 });
 
-  // Basic URL validation
-  try {
-    new URL(feedUrl);
-  } catch {
-    return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+  const urlCheck = await validateFeedUrl(feedUrl);
+  if (!urlCheck.valid) {
+    return NextResponse.json({ error: urlCheck.error }, { status: 400 });
   }
 
   // Try to fetch and parse RSS to get title
