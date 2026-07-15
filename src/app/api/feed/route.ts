@@ -1,15 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
+import { refreshStaleSources } from "@/lib/feed-refresher";
 import { NextResponse } from "next/server";
-import Parser from "rss-parser";
-
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
-
-function extractFirstImg(html: string | undefined): string | undefined {
-  if (!html) return undefined;
-  const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  return match?.[1];
-}
 
 interface FeedItem {
   title: string;
@@ -51,7 +42,6 @@ export async function GET(req: Request) {
       followedIds = searchParams.get("followed")?.split(",").filter(Boolean) ?? [];
     }
     if (feedMode === "discover" && userCuratorId) {
-      // Get all source IDs the user already has in their collections
       const { data: userSources } = await supabase
         .from("sources")
         .select("id, collection_id, collections!inner(curator_id)")
@@ -60,90 +50,22 @@ export async function GET(req: Request) {
     }
   }
 
-  // 1. Get all sources with curator info
+  // 1. Get all source IDs with curator info (no RSS fetching — reads from articles cache)
   const { data: sources, error } = await supabase
     .from("sources")
     .select("id, feed_url, title, site_url, last_fetched_at, collection_id, collections(curator_id, published, curators(display_name, id))");
 
   if (error || !sources?.length) return NextResponse.json([]);
 
-  // 2. Refresh stale sources
-  const now = Date.now();
-  const parser = new Parser();
-
-  await Promise.all(
-    sources.map(async (source) => {
-      const lastFetch = source.last_fetched_at
-        ? new Date(source.last_fetched_at).getTime()
-        : 0;
-      if (now - lastFetch < CACHE_TTL) return; // cache is fresh
-
-      // Service-role client scoped to write operations only
-      const serviceClient = createServiceClient();
-      try {
-        const feed = await new Promise<any>((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error("timeout")), 8000);
-          parser.parseURL(source.feed_url).then(
-            (result) => { clearTimeout(timer); resolve(result); },
-            (err) => { clearTimeout(timer); reject(err); }
-          );
-        });
-
-        // Upsert each article
-        for (const item of feed.items ?? []) {
-          const img =
-            item.enclosure?.url && item.enclosure?.type?.startsWith("image/")
-              ? item.enclosure.url
-              : (item as any)["media:content"]?.$.url
-                || (item as any)["media:thumbnail"]?.$.url
-                || extractFirstImg((item as any)["content:encoded"])
-                || extractFirstImg(item.content)
-                || extractFirstImg(item.description)
-                || undefined;
-
-          const article = {
-            source_id: source.id,
-            title: item.title ?? "Untitled",
-            link: item.link ?? "",
-            pub_date: item.pubDate ?? item.isoDate ?? new Date().toISOString(),
-            content_snippet: (item.contentSnippet ?? "").slice(0, 500),
-            content: (item as any)["content:encoded"] || item.content || item.contentSnippet || "",
-            image: img ?? null,
-          };
-
-          if (!article.link) continue;
-
-          await serviceClient.from("articles").upsert(article, {
-            onConflict: "source_id,link",
-            ignoreDuplicates: false,
-          });
-        }
-
-        // Update last_fetched_at
-        await serviceClient
-          .from("sources")
-          .update({ last_fetched_at: new Date().toISOString() })
-          .eq("id", source.id);
-      } catch {
-        // Mark as fetched anyway to avoid retrying dead feeds on every request
-        await serviceClient
-          .from("sources")
-          .update({ last_fetched_at: new Date().toISOString() })
-          .eq("id", source.id);
-      }
-    })
-  );
-
-  // 3. Read articles from DB, joined through to curator info
   let sourceIds = sources.map((s) => s.id);
 
-  // Exclude user's own sources in Discover mode
   if (excludeUserSourceIds && excludeUserSourceIds.length > 0) {
     sourceIds = sourceIds.filter((id) => !excludeUserSourceIds!.includes(id));
   }
   if (sourceIds.length === 0) return NextResponse.json([]);
 
-  let query = supabase
+  // 2. Read articles from DB cache, joined through to curator info
+  const { data: articles } = await supabase
     .from("articles")
     .select(`
       title, link, pub_date, content_snippet, image, source_id,
@@ -157,10 +79,9 @@ export async function GET(req: Request) {
     .order("pub_date", { ascending: false })
     .limit(200);
 
-  const { data: articles } = await query;
   if (!articles?.length) return NextResponse.json([]);
 
-  // 4. Deduplicate by link, merge curator names
+  // 3. Deduplicate by link, merge curator names
   const seen = new Map<string, FeedItem & { publishedCurators: Set<string> }>();
 
   for (const a of articles) {
@@ -205,7 +126,7 @@ export async function GET(req: Request) {
 
   let rawItems = Array.from(seen.values());
 
-  // 5. "Your Feed" filter — only user's own sources + followed
+  // 4. "Your Feed" filter — only user's own sources + followed
   if (feedMode === "your") {
     if (!userCuratorId) {
       return NextResponse.json([]);
@@ -217,7 +138,7 @@ export async function GET(req: Request) {
     });
   }
 
-  // 6. Two-tier attribution: strip names from private-only articles
+  // 5. Two-tier attribution: strip names from private-only articles
   let items: FeedItem[] = rawItems.map(({ publishedCurators, ...item }) => {
     if (publishedCurators.size === 0) {
       return { ...item, curatorNames: [] as string[] };
@@ -225,14 +146,14 @@ export async function GET(req: Request) {
     return item;
   });
 
-  // 7. Sort
+  // 6. Sort
   if (sort === "popular") {
     items.sort((a, b) => b.curatorNames.length - a.curatorNames.length);
   } else {
     items.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
   }
 
-  // 7b. Interleave by source so no source dominates consecutively
+  // 6b. Interleave by source so no source dominates consecutively
   const bySource = new Map<string, typeof items>();
   for (const item of items) {
     const key = item.sourceTitle;
@@ -254,7 +175,7 @@ export async function GET(req: Request) {
     idx++;
   }
 
-  // 8. Attach vote counts
+  // 7. Attach vote counts
   const sliced = items.slice(0, 50);
   const links = sliced.map((i) => i.link);
   const { data: votes } = await supabase
@@ -274,4 +195,21 @@ export async function GET(req: Request) {
   }));
 
   return NextResponse.json(withVotes);
+}
+
+// Triggered by a cron job or manual call to refresh stale RSS sources into the articles cache.
+export async function POST() {
+  const supabase = await createClient();
+
+  const { data: sources, error } = await supabase
+    .from("sources")
+    .select("id, feed_url, last_fetched_at");
+
+  if (error || !sources?.length) {
+    return NextResponse.json({ refreshed: 0 });
+  }
+
+  await refreshStaleSources(sources);
+
+  return NextResponse.json({ refreshed: sources.length });
 }
