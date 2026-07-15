@@ -16,6 +16,7 @@ interface FeedItem {
   curatorNames: string[];
   curatorIds: string[];
   contentSnippet: string;
+  content?: string;
   image?: string;
   upvotes?: number;
   downvotes?: number;
@@ -115,10 +116,24 @@ export default function FeedPage() {
           <button onClick={() => router.push("/feed?tab=curators")} className={`text-sm font-medium pb-1 border-b-2 transition-colors ${tab === "curators" ? "text-zinc-100 border-zinc-100" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>Popular Curators</button>
         </div>
         {tab !== "curators" && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                const links = items.map((i) => i.link);
+                const readLinks: string[] = JSON.parse(localStorage.getItem("ic:read") ?? "[]");
+                const merged = [...new Set([...readLinks, ...links])].slice(-1000);
+                localStorage.setItem("ic:read", JSON.stringify(merged));
+                window.dispatchEvent(new Event("ic:read-updated"));
+              }}
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              Mark all read
+            </button>
           <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 outline-none">
             <option value="latest">Latest</option>
             <option value="popular">Popular</option>
           </select>
+          </div>
         )}
       </div>
 

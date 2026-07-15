@@ -61,7 +61,13 @@ export async function GET(req: Request) {
   await Promise.all(
     sources.map(async (source) => {
       try {
-        const feed = await parser.parseURL(source.feed_url);
+        const feed = await new Promise<any>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("timeout")), 8000);
+          parser.parseURL(source.feed_url).then(
+            (result) => { clearTimeout(timer); resolve(result); },
+            (err) => { clearTimeout(timer); reject(err); }
+          );
+        });
         const curatorName = source.collections?.curators?.display_name ?? "Unknown";
         const curatorId = source.collections?.curator_id ?? null;
         const isPublished = source.collections?.published ?? false;
@@ -81,6 +87,7 @@ export async function GET(req: Request) {
             curatorNames: [curatorName],
             curatorIds: curatorId ? [curatorId] : [],
             contentSnippet: (item.contentSnippet ?? "").slice(0, 300),
+            content: (item as any)["content:encoded"] || item.content || (item.contentSnippet ?? ""),
             publishedCurators: new Set(isPublished && curatorId ? [curatorId] : []),
             ...(img ? { image: img } : {}),
           });
