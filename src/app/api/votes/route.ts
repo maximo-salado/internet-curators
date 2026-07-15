@@ -1,35 +1,40 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+// POST — apply a vote transition (anonymous)
+// Body: { link, prev: 1|-1|0, next: 1|-1|0 }
+// prev = user's previous vote, next = user's new vote
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const { link, direction } = await req.json();
+  const { link, prev, next } = await req.json();
 
-  if (!link || (direction !== 1 && direction !== -1)) {
-    return NextResponse.json({ error: "link and direction (1 or -1) required" }, { status: 400 });
+  if (!link || prev == null || next == null) {
+    return NextResponse.json({ error: "link, prev, and next required" }, { status: 400 });
   }
 
-  const column = direction === 1 ? "upvotes" : "downvotes";
-
-  // Try update existing
   const { data: existing } = await supabase
     .from("article_votes")
     .select("upvotes, downvotes")
     .eq("link", link)
     .single();
 
+  let upvotes = existing?.upvotes ?? 0;
+  let downvotes = existing?.downvotes ?? 0;
+
+  // Undo previous vote
+  if (prev === 1) upvotes = Math.max(0, upvotes - 1);
+  if (prev === -1) downvotes = Math.max(0, downvotes - 1);
+  // Apply new vote
+  if (next === 1) upvotes++;
+  if (next === -1) downvotes++;
+
   if (existing) {
-    await supabase
-      .from("article_votes")
-      .update({ [column]: existing[column] + 1 })
-      .eq("link", link);
+    await supabase.from("article_votes").update({ upvotes, downvotes }).eq("link", link);
   } else {
-    await supabase
-      .from("article_votes")
-      .insert({ link, upvotes: direction === 1 ? 1 : 0, downvotes: direction === -1 ? 1 : 0 });
+    await supabase.from("article_votes").insert({ link, upvotes, downvotes });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, upvotes, downvotes });
 }
 
 export async function GET(req: Request) {
