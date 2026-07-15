@@ -7,42 +7,43 @@ Every commit and PR on this project is co-created with AI agents. We note which 
 ```
 <type>: <description>
 
-Agent: <agents>
-Review: <agent> (optional)
+<role>: <agent>
 ```
 
 ## Agents
 
 | Role | Agent |
 |------|-------|
-| Orchestration | hermes |
-| Code | opencode |
-| Audit | claude |
+| orchestration | hermes |
+| code | opencode |
+| review | claude |
 
 ## Examples
 
 ```bash
 git commit -m "feat: Discover/Feed pipeline
 
-Agent: hermes + opencode
-Review: claude"
+orchestration: hermes
+code: opencode
+review: claude"
 
 git commit -m "ci: add build check workflow
 
-Agent: hermes"
+orchestration: hermes"
 
 git commit -m "fix: security audit — RLS, SSRF, vote inflation
 
-Agent: claude"
+code: claude
+review: claude"
 ```
 
 ## PR Format
 
 ```markdown
 ## Agent Stack
-- **Orchestration:** hermes
-- **Code:** opencode
-- **Review:** claude
+- **orchestration:** hermes
+- **code:** opencode
+- **review:** claude
 ```
 
 ## Why
