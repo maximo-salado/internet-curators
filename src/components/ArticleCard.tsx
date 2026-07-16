@@ -159,9 +159,19 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource 
       <div className={`relative flex flex-col ${hasImage ? "h-full justify-between p-4" : ""}`}>
         {/* Source badge — top */}
         <div>
-          <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${hasImage ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-400"}`}>
-            {item.sourceTitle}
-          </span>
+          {item.sourceId ? (
+            <Link
+              href={`/source/${item.sourceId}`}
+              onClick={(e) => e.stopPropagation()}
+              className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium hover:underline ${hasImage ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-400"}`}
+            >
+              {item.sourceTitle}
+            </Link>
+          ) : (
+            <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${hasImage ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-400"}`}>
+              {item.sourceTitle}
+            </span>
+          )}
         </div>
 
         {/* Title + snippet — middle */}
