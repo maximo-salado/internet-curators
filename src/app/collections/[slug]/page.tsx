@@ -1,8 +1,29 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 
 export const revalidate = 300; // 5-minute ISR — reads from articles cache, no live RSS fetches
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  return {
+    alternates: {
+      types: {
+        "application/rss+xml": [
+          {
+            title: "RSS Feed",
+            url: `/api/collections/${slug}/rss`,
+          },
+        ],
+      },
+    },
+  };
+}
 
 export default async function CollectionPage({
   params,
@@ -39,13 +60,14 @@ export default async function CollectionPage({
     link: string;
     pubDate: string;
     sourceTitle: string;
+    sourceId: string;
     contentSnippet: string;
   }> = [];
 
   if (sourceIds.length > 0) {
     const { data: articles } = await supabase
       .from("articles")
-      .select("title, link, pub_date, content_snippet, sources!inner(title)")
+      .select("title, link, pub_date, content_snippet, source_id, sources!inner(title)")
       .in("source_id", sourceIds)
       .order("pub_date", { ascending: false })
       .limit(50);
@@ -58,6 +80,7 @@ export default async function CollectionPage({
         link: a.link,
         pubDate: a.pub_date,
         sourceTitle: (a.sources as any)?.title || "Unknown",
+        sourceId: a.source_id,
         contentSnippet: (a.content_snippet ?? "").slice(0, 300),
       });
     }
@@ -91,7 +114,9 @@ export default async function CollectionPage({
               className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 hover:border-zinc-700 transition-colors"
             >
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs text-zinc-500">{item.sourceTitle}</span>
+                <Link href={`/source/${item.sourceId}`} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                  {item.sourceTitle}
+                </Link>
               </div>
               <a
                 href={item.link}
