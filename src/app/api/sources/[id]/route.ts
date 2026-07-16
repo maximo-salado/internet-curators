@@ -20,7 +20,12 @@ export async function DELETE(
 
   if (!source) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // RLS handles the auth check, but we verify explicitly too
+  // Verify the source belongs to the authenticated user
+  const ownerUserId = (source as any).collections?.curators?.user_id;
+  if (ownerUserId !== user.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { error } = await supabase.from("sources").delete().eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

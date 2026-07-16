@@ -8,11 +8,14 @@ export async function GET(req: Request) {
 
   const supabase = await createClient();
 
+  // Escape LIKE wildcards to treat % and _ as literal characters
+  const escaped = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
+
   // Search curators by display_name
   const { data: curators } = await supabase
     .from("curators")
     .select("id, display_name, bio")
-    .ilike("display_name", `%${q}%`)
+    .ilike("display_name", `%${escaped}%`)
     .limit(5);
 
   // Search published collections by name
@@ -20,7 +23,7 @@ export async function GET(req: Request) {
     .from("collections")
     .select("id, name, description, slug, curator_id, curators(display_name)")
     .eq("published", true)
-    .ilike("name", `%${q}%`)
+    .ilike("name", `%${escaped}%`)
     .limit(5);
 
   return NextResponse.json({

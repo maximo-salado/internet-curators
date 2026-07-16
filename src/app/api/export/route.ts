@@ -20,7 +20,7 @@ export async function GET() {
     .eq("curator_id", curator.id);
 
   const outlines = (collections ?? []).map((col: any) => {
-    const feeds = (col.sources ?? []).map((s: any) => {
+    const feeds = (col.sources ?? []).filter((s: any) => s.feed_url).map((s: any) => {
       const title = s.title || (() => {
         try { return new URL(s.feed_url).hostname.replace("www.", ""); } catch { return s.feed_url; }
       })();

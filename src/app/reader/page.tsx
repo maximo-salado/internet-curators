@@ -1,22 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-
-function sanitize(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<link[\s\S]*?>/gi, "")
-    .replace(/<meta[\s\S]*?>/gi, "")
-    .replace(/\s(on\w+)=/gi, "")
-    .replace(/<object[\s\S]*?<\/object>/gi, "")
-    .replace(/<embed[\s\S]*?>/gi, "")
-    .replace(/<video[\s\S]*?<\/video>/gi, "")
-    .replace(/<audio[\s\S]*?<\/audio>/gi, "")
-    .replace(/javascript:/gi, "");
-}
+import DOMPurify from "dompurify";
 
 export default function ReaderPage() {
   const searchParams = useSearchParams();
@@ -26,14 +12,25 @@ export default function ReaderPage() {
   const link = searchParams.get("link") || "";
   const image = searchParams.get("image") || "";
   const content = searchParams.get("content") || searchParams.get("snippet") || "";
-  const upvotes = parseInt(searchParams.get("upvotes") || "0");
-  const downvotes = parseInt(searchParams.get("downvotes") || "0");
 
-  const [upCount, setUpCount] = useState(upvotes);
-  const [downCount, setDownCount] = useState(downvotes);
+  const [upCount, setUpCount] = useState(0);
+  const [downCount, setDownCount] = useState(0);
   const [confirming, setConfirming] = useState<"hide" | "remove" | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const cleanHtml = sanitize(content);
+  const cleanHtml = DOMPurify.sanitize(content);
+
+  useEffect(() => {
+    if (!link) return;
+    fetch(`/api/votes?links=${encodeURIComponent(link)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data[link]) {
+          setUpCount(data[link].upvotes ?? 0);
+          setDownCount(data[link].downvotes ?? 0);
+        }
+      })
+      .catch(() => {});
+  }, [link]);
 
   const localVote = typeof window !== "undefined"
     ? (JSON.parse(localStorage.getItem("ic:votes") ?? "{}") as Record<string, number>)[link] ?? 0
