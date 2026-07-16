@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface FeedItem {
   title: string;
@@ -130,9 +131,9 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource 
     setConfirming(null);
   };
 
-  const curatorLabel = item.curatorNames.length > 0
-    ? `via ${item.curatorNames.join(", ")}`
-    : "Trending";
+  const curatorElements = item.curatorNames.length > 0
+    ? item.curatorNames.map((name, i) => ({ name, id: item.curatorIds[i] }))
+    : null;
 
   const hasImage = !!item.image;
 
@@ -196,7 +197,26 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource 
         {/* Curator + actions — bottom */}
         <div className={`flex items-center justify-between ${hasImage ? "" : "mt-3"}`}>
           <p className={`text-xs ${hasImage ? "text-white/50" : "text-zinc-600"}`}>
-            {curatorLabel} · {new Date(item.pubDate).toLocaleDateString()}
+            {curatorElements ? (
+              <>
+                via{" "}
+                {curatorElements.map((c, i) => (
+                  <span key={c.id}>
+                    <Link
+                      href={`/curator/${c.id}`}
+                      className={`underline-offset-2 hover:underline ${hasImage ? "text-white/70" : "text-zinc-400"}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {c.name}
+                    </Link>
+                    {i < curatorElements.length - 1 && ", "}
+                  </span>
+                ))}
+              </>
+            ) : (
+              "Trending"
+            )}{" "}
+            · {new Date(item.pubDate).toLocaleDateString()}
           </p>
         {/* Actions strip */}
         <div className={`flex items-center justify-around border-t border-zinc-800 pt-3 ${hasImage ? "relative z-10" : ""}`}>
