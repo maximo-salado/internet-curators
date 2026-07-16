@@ -29,8 +29,8 @@ export async function GET(
 
   if (!sources?.length) {
     // Return empty but valid RSS
-    return new NextResponse(emptyRss(collection.name, collection.description ?? ""), {
-      headers: { "Content-Type": "application/xml; charset=utf-8" },
+    return new NextResponse(emptyRss(collection.name, collection.description ?? "", `https://internet-curators.vercel.app/collections/${slug}`), {
+      headers: { "Content-Type": "application/rss+xml; charset=utf-8" },
     });
   }
 
@@ -89,7 +89,7 @@ export async function GET(
   });
 
   return new NextResponse(rss, {
-    headers: { "Content-Type": "application/xml; charset=utf-8" },
+    headers: { "Content-Type": "application/rss+xml; charset=utf-8" },
   });
 }
 
@@ -118,19 +118,22 @@ function buildRss(opts: {
     <description>${escapeXml(opts.description)}</description>
     <link>${escapeXml(opts.link)}</link>
     <atom:link href="${escapeXml(opts.link)}" rel="self" type="application/rss+xml"/>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <generator>Internet Curators</generator>
 ${items}
   </channel>
 </rss>`;
 }
 
-function emptyRss(title: string, description: string): string {
+function emptyRss(title: string, description: string, link: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>${escapeXml(title)}</title>
     <description>${escapeXml(description)}</description>
-    <link>https://internet-curators.vercel.app</link>
+    <link>${escapeXml(link)}</link>
+    <atom:link href="${escapeXml(link)}" rel="self" type="application/rss+xml"/>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <generator>Internet Curators</generator>
   </channel>
 </rss>`;
