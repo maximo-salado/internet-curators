@@ -1,8 +1,29 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 
 export const revalidate = 300; // 5-minute ISR — reads from articles cache, no live RSS fetches
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  return {
+    alternates: {
+      types: {
+        "application/rss+xml": [
+          {
+            title: "RSS Feed",
+            url: `/api/collections/${slug}/rss`,
+          },
+        ],
+      },
+    },
+  };
+}
 
 export default async function CollectionPage({
   params,
