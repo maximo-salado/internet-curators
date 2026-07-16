@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface FeedItem {
   title: string;
@@ -130,9 +131,9 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource 
     setConfirming(null);
   };
 
-  const curatorLabel = item.curatorNames.length > 0
-    ? `via ${item.curatorNames.join(", ")}`
-    : "Trending";
+  const curatorElements = item.curatorNames.length > 0
+    ? item.curatorNames.map((name, i) => ({ name, id: item.curatorIds[i] }))
+    : null;
 
   const hasImage = !!item.image;
 
@@ -158,9 +159,19 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource 
       <div className={`relative flex flex-col ${hasImage ? "h-full justify-between p-4" : ""}`}>
         {/* Source badge — top */}
         <div>
-          <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${hasImage ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-400"}`}>
-            {item.sourceTitle}
-          </span>
+          {item.sourceId ? (
+            <Link
+              href={`/source/${item.sourceId}`}
+              onClick={(e) => e.stopPropagation()}
+              className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium hover:underline ${hasImage ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-400"}`}
+            >
+              {item.sourceTitle}
+            </Link>
+          ) : (
+            <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${hasImage ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-400"}`}>
+              {item.sourceTitle}
+            </span>
+          )}
         </div>
 
         {/* Title + snippet — middle */}
@@ -196,7 +207,26 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource 
         {/* Curator + actions — bottom */}
         <div className={`flex items-center justify-between ${hasImage ? "" : "mt-3"}`}>
           <p className={`text-xs ${hasImage ? "text-white/50" : "text-zinc-600"}`}>
-            {curatorLabel} · {new Date(item.pubDate).toLocaleDateString()}
+            {curatorElements ? (
+              <>
+                via{" "}
+                {curatorElements.map((c, i) => (
+                  <span key={c.id}>
+                    <Link
+                      href={`/curator/${c.id}`}
+                      className={`underline-offset-2 hover:underline ${hasImage ? "text-white/70" : "text-zinc-400"}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {c.name}
+                    </Link>
+                    {i < curatorElements.length - 1 && ", "}
+                  </span>
+                ))}
+              </>
+            ) : (
+              "Trending"
+            )}{" "}
+            · {new Date(item.pubDate).toLocaleDateString()}
           </p>
         {/* Actions strip */}
         <div className={`flex items-center justify-around border-t border-zinc-800 pt-3 ${hasImage ? "relative z-10" : ""}`}>

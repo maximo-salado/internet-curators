@@ -1,0 +1,136 @@
+import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { SourceFollowButton } from "@/components/SourceFollowButton";
+
+export const revalidate = 300;
+
+export default async function SourcePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: source } = await supabase
+    .from("sources")
+    .select("id, title, description, site_url, feed_url, created_at")
+    .eq("id", id)
+    .single();
+
+  if (!source) notFound();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  const isLoggedIn = !!user;
+
+  const { data: articles } = await supabase
+    .from("articles")
+    .select("title, link, pub_date, content_snippet")
+    .eq("source_id", id)
+    .order("pub_date", { ascending: false })
+    .limit(100);
+
+  const { data: curators } = await supabase
+    .from("sources")
+    .select("collections!inner(curator_id, curators!inner(display_name, id))")
+    .eq("feed_url", source.feed_url);
+
+  const curatorMap = new Map<string, { id: string; display_name: string }>();
+  for (const row of curators ?? []) {
+    const c = (row as any).collections?.curators;
+    if (c?.id && c?.display_name) {
+      curatorMap.set(c.id, { id: c.id, display_name: c.display_name });
+    }
+  }
+  const uniqueCurators = Array.from(curatorMap.values());
+
+  return (
+    <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
+      <Link href="/" className="mb-6 inline-block text-sm text-zinc-500 hover:text-zinc-300">
+        ← Back
+      </Link>
+
+      <div className="mb-10">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">{source.title || "Untitled Source"}</h1>
+          <SourceFollowButton sourceId={source.id} isLoggedIn={isLoggedIn} />
+        </div>
+        {source.description && (
+          <p className="mt-3 text-zinc-400">{source.description}</p>
+        )}
+        {source.site_url && (
+          <a
+            href={source.site_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-block text-sm text-zinc-500 hover:text-zinc-300"
+          >
+            {source.site_url.replace(/^https?:\/\//, "")} ↗
+          </a>
+        )}
+        <p className="mt-3 text-sm text-zinc-600">
+          {(articles ?? []).length} articles · Added{" "}
+          {new Date(source.created_at).toLocaleDateString()}
+        </p>
+      </div>
+
+      {uniqueCurators.length > 0 && (
+        <div className="mb-8">
+          <h2 className="mb-3 text-sm font-medium text-zinc-300">
+            Curators tracking this source ({uniqueCurators.length})
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {uniqueCurators.map((c) => (
+              <Link
+                key={c.id}
+                href={`/curator/${c.id}`}
+                className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-300 transition-colors"
+              >
+                {c.display_name}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <h2 className="mb-4 text-sm font-medium text-zinc-300">
+        Articles ({(articles ?? []).length})
+      </h2>
+
+      {!articles?.length ? (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-12 text-center">
+          <p className="text-zinc-400">No articles yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {articles.map((item) => (
+            <article
+              key={item.link}
+              className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 hover:border-zinc-700 transition-colors"
+            >
+              <a
+                href={item.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
+                <h3 className="font-medium leading-snug hover:text-zinc-300 transition-colors">
+                  {item.title}
+                </h3>
+              </a>
+              {item.content_snippet && (
+                <p className="mt-2 text-sm text-zinc-500 line-clamp-2">
+                  {item.content_snippet}
+                </p>
+              )}
+              <p className="mt-3 text-xs text-zinc-600">
+                {new Date(item.pub_date).toLocaleDateString()}
+              </p>
+            </article>
+          ))}
+        </div>
+      )}
+    </main>
+  );
+}
