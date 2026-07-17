@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CuratorStories } from "@/components/CuratorStories";
 import { getSeenSources, saveSeenSources, boostUnseen } from "@/lib/feed-rotation";
@@ -13,6 +14,7 @@ interface FeedItem {
   pubDate: string;
   sourceTitle: string;
   sourceUrl: string;
+  sourceId?: string;
   curatorNames: string[];
   curatorIds: string[];
   contentSnippet: string;
@@ -51,6 +53,8 @@ export default function FeedPage() {
   const [followedIds, setFollowedIds] = useState<string[]>(
     typeof window !== "undefined" ? JSON.parse(localStorage.getItem("ic:followed") ?? "[]") : []
   );
+  const [nudgeData, setNudgeData] = useState<{ currentTopic: string; suggestedTopic: string; suggestedSourceId: string } | null>(null);
+  const nudgeShownRef = useRef(typeof window !== "undefined" && sessionStorage.getItem("ic:nudge-shown") === "1");
 
   const syncLocal = useCallback(() => setLocal(readLocalStorage()), []);
 
@@ -141,6 +145,31 @@ export default function FeedPage() {
         setTotal(data.total ?? 0);
         setHasMore(data.hasMore ?? false);
         setOffset((prev) => prev + PAGE_SIZE);
+
+        if (!nudgeShownRef.current) {
+          const allItems = [...items, ...boosted];
+          const freq = new Map<string, { count: number; sourceId?: string }>();
+          for (const item of allItems) {
+            const key = item.sourceTitle;
+            const entry = freq.get(key);
+            if (entry) entry.count++;
+            else freq.set(key, { count: 1, sourceId: item.sourceId });
+          }
+          if (freq.size >= 2) {
+            const sorted = [...freq.entries()].sort((a, b) => b[1].count - a[1].count);
+            const dominant = sorted[0];
+            const alternative = sorted[Math.floor(sorted.length / 2)];
+            if (dominant[0] !== alternative[0] && alternative[1].sourceId) {
+              setNudgeData({
+                currentTopic: dominant[0],
+                suggestedTopic: alternative[0],
+                suggestedSourceId: alternative[1].sourceId,
+              });
+              nudgeShownRef.current = true;
+              sessionStorage.setItem("ic:nudge-shown", "1");
+            }
+          }
+        }
       })
       .finally(() => setLoadingMore(false));
   }, [loadingMore, hasMore, offset, sort, tab, followedIds]);
@@ -240,6 +269,20 @@ export default function FeedPage() {
               showAddSource={tab !== "your"}
             />
           ))}
+
+          {nudgeData && (
+            <div className="border-t border-zinc-800 py-4 text-center">
+              <p className="text-xs text-zinc-500">
+                You have been reading a lot of {nudgeData.currentTopic}.{" "}
+                <Link
+                  href={`/source/${nudgeData.suggestedSourceId}`}
+                  className="text-zinc-400 underline underline-offset-2 hover:text-zinc-300 transition-colors"
+                >
+                  Try {nudgeData.suggestedTopic}?
+                </Link>
+              </p>
+            </div>
+          )}
 
           <div className="py-6 text-center">
             <p className="text-xs text-zinc-600 mb-3">
