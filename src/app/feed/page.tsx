@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CuratorStories } from "@/components/CuratorStories";
+import { ReadingStats } from "@/components/ReadingStats";
 import { getSeenSources, saveSeenSources, boostUnseen } from "@/lib/feed-rotation";
+import { getFreshPicks, saveShownPicks } from "@/lib/fresh-picks";
 
 interface FeedItem {
   title: string;
@@ -12,6 +15,7 @@ interface FeedItem {
   pubDate: string;
   sourceTitle: string;
   sourceUrl: string;
+  sourceId?: string;
   curatorNames: string[];
   curatorIds: string[];
   contentSnippet: string;
@@ -45,10 +49,15 @@ export default function FeedPage() {
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [freshPicks, setFreshPicks] = useState<FeedItem[]>([]);
   const [local, setLocal] = useState(() => (typeof window !== "undefined" ? readLocalStorage() : { followedIds: [], votes: {}, hiddenLinks: [], removedSources: [] }));
   const [followedIds, setFollowedIds] = useState<string[]>(
     typeof window !== "undefined" ? JSON.parse(localStorage.getItem("ic:followed") ?? "[]") : []
   );
+  const [nudgeData, setNudgeData] = useState<{ currentTopic: string; suggestedTopic: string; suggestedSourceId: string } | null>(null);
+  const nudgeShownRef = useRef(typeof window !== "undefined" && sessionStorage.getItem("ic:nudge-shown") === "1");
+  const [digestMode, setDigestMode] = useState(false);
+  const [showDigestBanner, setShowDigestBanner] = useState(false);
 
   const syncLocal = useCallback(() => setLocal(readLocalStorage()), []);
 
@@ -72,6 +81,15 @@ export default function FeedPage() {
   }, [syncLocal, onFollowedUpdated]);
 
   useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const lastVisit = localStorage.getItem("ic:last-visit-date");
+    if (lastVisit && lastVisit !== today && followedIds.length > 0) {
+      setShowDigestBanner(true);
+    }
+    localStorage.setItem("ic:last-visit-date", today);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     setLoading(true);
     setItems([]);
     setOffset(0);
@@ -92,12 +110,18 @@ export default function FeedPage() {
         const seen = getSeenSources();
         const boosted = boostUnseen(pageItems, seen);
         setItems(boosted);
+        setFreshPicks(getFreshPicks(pageItems, seen));
         setTotal(data.total ?? 0);
         setHasMore(data.hasMore ?? false);
         setOffset(PAGE_SIZE);
       })
       .finally(() => setLoading(false));
   }, [tab, sort, followedIds]);
+
+  // Track shown fresh picks in sessionStorage so refresh doesn't clear them
+  useEffect(() => {
+    if (freshPicks.length > 0) saveShownPicks(freshPicks.map((p) => p.link));
+  }, [freshPicks]);
 
   // Save seen sources on unmount or tab switch
   useEffect(() => {
@@ -138,6 +162,31 @@ export default function FeedPage() {
         setTotal(data.total ?? 0);
         setHasMore(data.hasMore ?? false);
         setOffset((prev) => prev + PAGE_SIZE);
+
+        if (!nudgeShownRef.current) {
+          const allItems = [...items, ...boosted];
+          const freq = new Map<string, { count: number; sourceId?: string }>();
+          for (const item of allItems) {
+            const key = item.sourceTitle;
+            const entry = freq.get(key);
+            if (entry) entry.count++;
+            else freq.set(key, { count: 1, sourceId: item.sourceId });
+          }
+          if (freq.size >= 2) {
+            const sorted = [...freq.entries()].sort((a, b) => b[1].count - a[1].count);
+            const dominant = sorted[0];
+            const alternative = sorted[Math.floor(sorted.length / 2)];
+            if (dominant[0] !== alternative[0] && alternative[1].sourceId) {
+              setNudgeData({
+                currentTopic: dominant[0],
+                suggestedTopic: alternative[0],
+                suggestedSourceId: alternative[1].sourceId,
+              });
+              nudgeShownRef.current = true;
+              sessionStorage.setItem("ic:nudge-shown", "1");
+            }
+          }
+        }
       })
       .finally(() => setLoadingMore(false));
   }, [loadingMore, hasMore, offset, sort, tab, followedIds]);
@@ -160,6 +209,29 @@ export default function FeedPage() {
     return result;
   }, [items, local, tab, sort]);
 
+  const digestItems = useMemo(() => {
+    const seenCurators = new Set<string>();
+    const result: FeedItem[] = [];
+    for (const item of filteredItems) {
+      for (const id of item.curatorIds) {
+        if (!seenCurators.has(id)) {
+          seenCurators.add(id);
+          result.push(item);
+          break;
+        }
+      }
+      if (seenCurators.size >= followedIds.length) break;
+    }
+    return result;
+  }, [filteredItems, followedIds]);
+
+  const displayItems = useMemo(() => {
+    const base = digestMode ? digestItems : filteredItems;
+    if (freshPicks.length === 0) return base;
+    const pickLinks = new Set(freshPicks.map((p) => p.link));
+    return base.filter((item) => !pickLinks.has(item.link));
+  }, [digestMode, digestItems, filteredItems, freshPicks]);
+
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 py-4">
       <CuratorStories />
@@ -181,8 +253,50 @@ export default function FeedPage() {
             <option value="latest">Latest</option>
             <option value="popular">Popular</option>
           </select>
+          {showDigestBanner && tab === "your" && (
+            <button
+              onClick={() => { setDigestMode((d) => !d); setShowDigestBanner(false); }}
+              className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+            >
+              {digestMode ? "Full Feed" : "Daily Digest"}
+            </button>
+          )}
         </div>
       </div>
+
+      {showDigestBanner && tab === "your" && !digestMode && followedIds.length > 0 && (
+        <div className="mx-4 mb-4 rounded-lg border border-zinc-700 bg-zinc-800/60 px-4 py-3 flex items-center justify-between">
+          <p className="text-xs text-zinc-400">Welcome back! Try the Daily Digest for a quick recap from your curators.</p>
+          <button
+            onClick={() => { setDigestMode(true); setShowDigestBanner(false); }}
+            className="ml-3 whitespace-nowrap rounded-md bg-zinc-700 px-3 py-1 text-xs text-zinc-200 hover:bg-zinc-600 transition-colors"
+          >
+            View Digest
+          </button>
+        </div>
+      )}
+
+      {freshPicks.length > 0 && !loading && !digestMode && (
+        <div className="mx-4 mb-6 rounded-lg border border-zinc-800 bg-zinc-800/50 p-4">
+          <h2 className="mb-3 text-xs font-medium text-zinc-500">Fresh since your last visit</h2>
+          <div className="space-y-2">
+            {freshPicks.map((item, i) => (
+              <ArticleCard
+                key={`fresh-${item.link}-${i}`}
+                item={item}
+                onRemoveSource={(src) => {
+                  const next = [...local.removedSources, src];
+                  localStorage.setItem("ic:removedSources", JSON.stringify(next));
+                  window.dispatchEvent(new Event("ic:removedSources-updated"));
+                }}
+                hidden={false}
+                vote={local.votes[item.link] ?? 0}
+                showAddSource={tab !== "your"}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-4">
@@ -194,14 +308,14 @@ export default function FeedPage() {
             </div>
           ))}
         </div>
-      ) : filteredItems.length === 0 ? (
+      ) : displayItems.length === 0 ? (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-12 text-center">
           <p className="text-zinc-400">No articles yet.</p>
           <p className="mt-2 text-sm text-zinc-600">Curators are building their collections. Check back soon.</p>
         </div>
       ) : (
         <div className="px-4 space-y-2">
-          {filteredItems.map((item, i) => (
+          {displayItems.map((item, i) => (
             <ArticleCard
               key={`${item.link}-${i}`}
               item={item}
@@ -213,12 +327,27 @@ export default function FeedPage() {
               hidden={false}
               vote={local.votes[item.link] ?? 0}
               showAddSource={tab !== "your"}
+              compact={digestMode}
             />
           ))}
 
+          {nudgeData && !digestMode && (
+            <div className="border-t border-zinc-800 py-4 text-center">
+              <p className="text-xs text-zinc-500">
+                You have been reading a lot of {nudgeData.currentTopic}.{" "}
+                <Link
+                  href={`/source/${nudgeData.suggestedSourceId}`}
+                  className="text-zinc-400 underline underline-offset-2 hover:text-zinc-300 transition-colors"
+                >
+                  Try {nudgeData.suggestedTopic}?
+                </Link>
+              </p>
+            </div>
+          )}
+
           <div className="py-6 text-center">
             <p className="text-xs text-zinc-600 mb-3">
-              Showing {filteredItems.length} of {total} articles
+              Showing {displayItems.length} of {total} articles
             </p>
             {hasMore ? (
               <button
@@ -232,6 +361,7 @@ export default function FeedPage() {
               <p className="text-sm text-zinc-500">You are all caught up!</p>
             )}
           </div>
+          <ReadingStats loadedCount={items.length} />
         </div>
       )}
     </main>
