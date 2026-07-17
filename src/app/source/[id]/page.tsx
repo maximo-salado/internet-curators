@@ -31,19 +31,27 @@ export default async function SourcePage({
     .order("pub_date", { ascending: false })
     .limit(100);
 
-  const { data: curators } = await supabase
+  // Published curators — shown with names and links
+  const { data: publishedCurators } = await supabase
     .from("sources")
     .select("collections!inner(curator_id, curators!inner(display_name, id))")
+    .eq("feed_url", source.feed_url)
+    .eq("collections.published", true);
+
+  // Total unique curator count (including private) — for count only
+  const { count: totalCuratorCount } = await supabase
+    .from("sources")
+    .select("collections!inner(curator_id)", { count: "exact", head: true })
     .eq("feed_url", source.feed_url);
 
   const curatorMap = new Map<string, { id: string; display_name: string }>();
-  for (const row of curators ?? []) {
+  for (const row of publishedCurators ?? []) {
     const c = (row as any).collections?.curators;
     if (c?.id && c?.display_name) {
       curatorMap.set(c.id, { id: c.id, display_name: c.display_name });
     }
   }
-  const uniqueCurators = Array.from(curatorMap.values());
+  const uniquePublished = Array.from(curatorMap.values());
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
@@ -75,13 +83,14 @@ export default async function SourcePage({
         </p>
       </div>
 
-      {uniqueCurators.length > 0 && (
+      {uniquePublished.length > 0 ? (
         <div className="mb-8">
           <h2 className="mb-3 text-sm font-medium text-zinc-300">
-            Curators tracking this source ({uniqueCurators.length})
+            Curators tracking this source
+            {totalCuratorCount ? ` (${totalCuratorCount})` : ` (${uniquePublished.length})`}
           </h2>
           <div className="flex flex-wrap gap-2">
-            {uniqueCurators.map((c) => (
+            {uniquePublished.map((c) => (
               <Link
                 key={c.id}
                 href={`/curator/${c.id}`}
@@ -90,9 +99,20 @@ export default async function SourcePage({
                 {c.display_name}
               </Link>
             ))}
+            {totalCuratorCount && totalCuratorCount > uniquePublished.length && (
+              <span className="rounded-full border border-zinc-800 px-3 py-1 text-xs text-zinc-600">
+                +{totalCuratorCount - uniquePublished.length} other{totalCuratorCount - uniquePublished.length !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
         </div>
-      )}
+      ) : totalCuratorCount && totalCuratorCount > 0 ? (
+        <div className="mb-8">
+          <h2 className="mb-3 text-sm font-medium text-zinc-300">
+            Tracked by {totalCuratorCount} curator{totalCuratorCount !== 1 ? "s" : ""}
+          </h2>
+        </div>
+      ) : null}
 
       <h2 className="mb-4 text-sm font-medium text-zinc-300">
         Articles ({(articles ?? []).length})

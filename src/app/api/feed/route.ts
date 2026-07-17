@@ -16,10 +16,35 @@ interface FeedItem {
   image?: string;
 }
 
+function mulberry32(a: number) {
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seededShuffle<T>(arr: T[], seed: string): T[] {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  }
+  const rng = mulberry32(h);
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 export async function GET(req: Request) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
   const sort = searchParams.get("sort") ?? "latest";
+  const seed = searchParams.get("seed");
   const offset = Math.max(0, parseInt(searchParams.get("offset") ?? "0", 10) || 0);
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20));
 
@@ -150,33 +175,36 @@ export async function GET(req: Request) {
     return item;
   });
 
-  // 6. Sort
-  if (sort === "popular") {
-    items.sort((a, b) => b.curatorNames.length - a.curatorNames.length);
+  // 6. Sort or seed-based shuffle
+  if (feedMode === "discover" && seed) {
+    items = seededShuffle(items, seed);
   } else {
-    items.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-  }
-
-  // 6b. Interleave by source so no source dominates consecutively
-  const bySource = new Map<string, typeof items>();
-  for (const item of items) {
-    const key = item.sourceTitle;
-    if (!bySource.has(key)) bySource.set(key, []);
-    bySource.get(key)!.push(item);
-  }
-  const sourceKeys = Array.from(bySource.keys());
-  items = [];
-  let idx = 0;
-  while (items.length < 200 && sourceKeys.length > 0) {
-    const sourceKey = sourceKeys[idx % sourceKeys.length];
-    const bucket = bySource.get(sourceKey)!;
-    if (bucket.length > 0) {
-      items.push(bucket.shift()!);
+    if (sort === "popular") {
+      items.sort((a, b) => b.curatorNames.length - a.curatorNames.length);
     } else {
-      sourceKeys.splice(idx % sourceKeys.length, 1);
-      continue;
+      items.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
     }
-    idx++;
+    // Interleave by source so no source dominates consecutively
+    const bySource = new Map<string, typeof items>();
+    for (const item of items) {
+      const key = item.sourceTitle;
+      if (!bySource.has(key)) bySource.set(key, []);
+      bySource.get(key)!.push(item);
+    }
+    const sourceKeys = Array.from(bySource.keys());
+    items = [];
+    let idx = 0;
+    while (items.length < 200 && sourceKeys.length > 0) {
+      const sourceKey = sourceKeys[idx % sourceKeys.length];
+      const bucket = bySource.get(sourceKey)!;
+      if (bucket.length > 0) {
+        items.push(bucket.shift()!);
+      } else {
+        sourceKeys.splice(idx % sourceKeys.length, 1);
+        continue;
+      }
+      idx++;
+    }
   }
 
   // 8. Attach vote counts (fetch for the requested page only)
