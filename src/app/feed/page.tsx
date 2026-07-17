@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArticleCard } from "@/components/ArticleCard";
 import { SourceReviewCard } from "@/components/SourceReviewCard";
 import { CuratorStories } from "@/components/CuratorStories";
+import { ReadingStats } from "@/components/ReadingStats";
 import { getSeenSources, saveSeenSources, boostUnseen } from "@/lib/feed-rotation";
 
 interface FeedItem {
@@ -494,6 +495,7 @@ export default function FeedPage() {
                   hidden={false}
                   vote={local.votes[item.link] ?? 0}
                   showAddSource={tab !== "your"}
+                  compact={digestMode}
                 />
               ))}
 
@@ -529,6 +531,7 @@ export default function FeedPage() {
                   <p className="text-sm text-zinc-500">You are all caught up!</p>
                 )}
               </div>
+              <ReadingStats loadedCount={items.length} />
             </div>
           )}
         </>

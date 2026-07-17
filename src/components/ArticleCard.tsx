@@ -27,9 +27,10 @@ interface ArticleCardProps {
   hidden: boolean;
   vote: number;
   showAddSource?: boolean;
+  compact?: boolean;
 }
 
-export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource }: ArticleCardProps) {
+export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource, compact }: ArticleCardProps) {
   const [confirming, setConfirming] = useState<"hide" | "remove" | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -78,6 +79,7 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource 
       readLinks.push(item.link);
       if (readLinks.length > 1000) readLinks.splice(0, readLinks.length - 1000);
       localStorage.setItem("ic:read", JSON.stringify(readLinks));
+      window.dispatchEvent(new CustomEvent("ic:article-read", { detail: { link: item.link, sourceTitle: item.sourceTitle } }));
     }
   }
 
@@ -97,6 +99,40 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource 
   }, [menuOpen]);
 
   if (hidden) return null;
+
+  if (compact) {
+    return (
+      <article className="rounded-lg bg-zinc-900 px-3 py-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <button
+              onClick={() => {
+                markRead();
+                const params = new URLSearchParams({
+                  title: item.title,
+                  link: item.link,
+                  source: item.sourceTitle,
+                  date: item.pubDate,
+                  upvotes: String(upCount),
+                  downvotes: String(downCount),
+                  ...(item.content ? { content: item.content } : { snippet: item.contentSnippet }),
+                  ...(item.image ? { image: item.image } : {}),
+                });
+                router.push(`/reader?${params.toString()}`);
+              }}
+              className="block text-left w-full"
+            >
+              <h3 className="text-sm font-medium text-zinc-100 leading-snug truncate">{item.title}</h3>
+            </button>
+            <p className="mt-0.5 text-xs text-zinc-500 truncate">
+              {item.sourceTitle}
+              {item.curatorNames.length > 0 && ` · via ${item.curatorNames[0]}`}
+            </p>
+          </div>
+        </div>
+      </article>
+    );
+  }
   const handleVote = (dir: 1 | -1) => {
     const votes = JSON.parse(localStorage.getItem("ic:votes") ?? "{}") as Record<string, number>;
     const prev = votes[item.link] ?? 0;
@@ -135,7 +171,7 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource 
     ? item.curatorNames.map((name, i) => ({ name, id: item.curatorIds[i] }))
     : null;
 
-  const hasImage = !!item.image;
+  const hasImage = !compact && !!item.image;
 
   return (
     <article ref={cardRef} className={`rounded-xl overflow-hidden relative ${hasImage ? "h-80" : "bg-zinc-900 px-4 py-5"}`}>
