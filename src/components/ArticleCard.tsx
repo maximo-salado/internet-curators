@@ -79,6 +79,7 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource,
       readLinks.push(item.link);
       if (readLinks.length > 1000) readLinks.splice(0, readLinks.length - 1000);
       localStorage.setItem("ic:read", JSON.stringify(readLinks));
+      window.dispatchEvent(new CustomEvent("ic:article-read", { detail: { link: item.link, sourceTitle: item.sourceTitle } }));
     }
   }
 

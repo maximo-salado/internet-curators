@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CuratorStories } from "@/components/CuratorStories";
+import { ReadingStats } from "@/components/ReadingStats";
 import { getSeenSources, saveSeenSources, boostUnseen } from "@/lib/feed-rotation";
 import { getFreshPicks } from "@/lib/fresh-picks";
 
@@ -350,6 +351,7 @@ export default function FeedPage() {
               <p className="text-sm text-zinc-500">You are all caught up!</p>
             )}
           </div>
+          <ReadingStats loadedCount={items.length} />
         </div>
       )}
     </main>
