@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CuratorStories } from "@/components/CuratorStories";
 import { getSeenSources, saveSeenSources, boostUnseen } from "@/lib/feed-rotation";
+import { getFreshPicks } from "@/lib/fresh-picks";
 
 interface FeedItem {
   title: string;
@@ -45,6 +46,7 @@ export default function FeedPage() {
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [freshPicks, setFreshPicks] = useState<FeedItem[]>([]);
   const [local, setLocal] = useState(() => (typeof window !== "undefined" ? readLocalStorage() : { followedIds: [], votes: {}, hiddenLinks: [], removedSources: [] }));
   const [followedIds, setFollowedIds] = useState<string[]>(
     typeof window !== "undefined" ? JSON.parse(localStorage.getItem("ic:followed") ?? "[]") : []
@@ -92,6 +94,7 @@ export default function FeedPage() {
         const seen = getSeenSources();
         const boosted = boostUnseen(pageItems, seen);
         setItems(boosted);
+        setFreshPicks(getFreshPicks(pageItems, seen));
         setTotal(data.total ?? 0);
         setHasMore(data.hasMore ?? false);
         setOffset(PAGE_SIZE);
@@ -183,6 +186,28 @@ export default function FeedPage() {
           </select>
         </div>
       </div>
+
+      {freshPicks.length > 0 && !loading && (
+        <div className="mx-4 mb-6 rounded-lg border border-zinc-800 bg-zinc-800/50 p-4">
+          <h2 className="mb-3 text-xs font-medium text-zinc-500">Fresh since your last visit</h2>
+          <div className="space-y-2">
+            {freshPicks.map((item, i) => (
+              <ArticleCard
+                key={`fresh-${item.link}-${i}`}
+                item={item}
+                onRemoveSource={(src) => {
+                  const next = [...local.removedSources, src];
+                  localStorage.setItem("ic:removedSources", JSON.stringify(next));
+                  window.dispatchEvent(new Event("ic:removedSources-updated"));
+                }}
+                hidden={false}
+                vote={local.votes[item.link] ?? 0}
+                showAddSource={tab !== "your"}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-4">
