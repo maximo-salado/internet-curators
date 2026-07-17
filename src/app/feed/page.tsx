@@ -7,7 +7,7 @@ import { ArticleCard } from "@/components/ArticleCard";
 import { CuratorStories } from "@/components/CuratorStories";
 import { ReadingStats } from "@/components/ReadingStats";
 import { getSeenSources, saveSeenSources, boostUnseen } from "@/lib/feed-rotation";
-import { getFreshPicks } from "@/lib/fresh-picks";
+import { getFreshPicks, saveShownPicks } from "@/lib/fresh-picks";
 
 interface FeedItem {
   title: string;
@@ -118,6 +118,11 @@ export default function FeedPage() {
       .finally(() => setLoading(false));
   }, [tab, sort, followedIds]);
 
+  // Track shown fresh picks in sessionStorage so refresh doesn't clear them
+  useEffect(() => {
+    if (freshPicks.length > 0) saveShownPicks(freshPicks.map((p) => p.link));
+  }, [freshPicks]);
+
   // Save seen sources on unmount or tab switch
   useEffect(() => {
     return () => {
@@ -220,7 +225,12 @@ export default function FeedPage() {
     return result;
   }, [filteredItems, followedIds]);
 
-  const displayItems = digestMode ? digestItems : filteredItems;
+  const displayItems = useMemo(() => {
+    const base = digestMode ? digestItems : filteredItems;
+    if (freshPicks.length === 0) return base;
+    const pickLinks = new Set(freshPicks.map((p) => p.link));
+    return base.filter((item) => !pickLinks.has(item.link));
+  }, [digestMode, digestItems, filteredItems, freshPicks]);
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 py-4">
