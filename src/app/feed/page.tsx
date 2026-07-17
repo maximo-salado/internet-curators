@@ -7,7 +7,6 @@ import { ArticleCard } from "@/components/ArticleCard";
 import { CuratorStories } from "@/components/CuratorStories";
 import { ReadingStats } from "@/components/ReadingStats";
 import { getSeenSources, saveSeenSources, boostUnseen } from "@/lib/feed-rotation";
-import { getFreshPicks, saveShownPicks } from "@/lib/fresh-picks";
 
 interface FeedItem {
   title: string;
@@ -49,8 +48,15 @@ export default function FeedPage() {
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [freshPicks, setFreshPicks] = useState<FeedItem[]>([]);
   const [local, setLocal] = useState(() => (typeof window !== "undefined" ? readLocalStorage() : { followedIds: [], votes: {}, hiddenLinks: [], removedSources: [] }));
+  const [discoverSeed] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const stored = sessionStorage.getItem("ic:discover-seed");
+    if (stored) return stored;
+    const seed = String(Math.floor(Math.random() * 1000000));
+    sessionStorage.setItem("ic:discover-seed", seed);
+    return seed;
+  });
   const [followedIds, setFollowedIds] = useState<string[]>(
     typeof window !== "undefined" ? JSON.parse(localStorage.getItem("ic:followed") ?? "[]") : []
   );
@@ -102,26 +108,24 @@ export default function FeedPage() {
       params.set("followed", followedIds.join(","));
     } else {
       params.set("feed", "discover");
+      if (discoverSeed) params.set("seed", discoverSeed);
     }
     fetch(`/api/feed?${params}`)
       .then((r) => r.json())
       .then((data) => {
         const pageItems: FeedItem[] = data.items ?? [];
-        const seen = getSeenSources();
-        const boosted = boostUnseen(pageItems, seen);
-        setItems(boosted);
-        setFreshPicks(getFreshPicks(pageItems));
+        if (tab === "your") {
+          const seen = getSeenSources();
+          setItems(boostUnseen(pageItems, seen));
+        } else {
+          setItems(pageItems);
+        }
         setTotal(data.total ?? 0);
         setHasMore(data.hasMore ?? false);
         setOffset(PAGE_SIZE);
       })
       .finally(() => setLoading(false));
-  }, [tab, sort, followedIds]);
-
-  // Track shown fresh picks in sessionStorage so refresh doesn't clear them
-  useEffect(() => {
-    if (freshPicks.length > 0) saveShownPicks(freshPicks.map((p) => p.link));
-  }, [freshPicks]);
+  }, [tab, sort, followedIds, discoverSeed]);
 
   // Save seen sources on unmount or tab switch
   useEffect(() => {
@@ -151,20 +155,26 @@ export default function FeedPage() {
       params.set("followed", followedIds.join(","));
     } else {
       params.set("feed", "discover");
+      if (discoverSeed) params.set("seed", discoverSeed);
     }
     fetch(`/api/feed?${params}`)
       .then((r) => r.json())
       .then((data) => {
         const pageItems: FeedItem[] = data.items ?? [];
-        const seen = getSeenSources();
-        const boosted = boostUnseen(pageItems, seen);
-        setItems((prev) => [...prev, ...boosted]);
+        let newItems: FeedItem[];
+        if (tab === "your") {
+          const seen = getSeenSources();
+          newItems = boostUnseen(pageItems, seen);
+        } else {
+          newItems = pageItems;
+        }
+        setItems((prev) => [...prev, ...newItems]);
         setTotal(data.total ?? 0);
         setHasMore(data.hasMore ?? false);
         setOffset((prev) => prev + PAGE_SIZE);
 
         if (!nudgeShownRef.current) {
-          const allItems = [...items, ...boosted];
+          const allItems = [...items, ...newItems];
           const freq = new Map<string, { count: number; sourceId?: string }>();
           for (const item of allItems) {
             const key = item.sourceTitle;
@@ -189,7 +199,7 @@ export default function FeedPage() {
         }
       })
       .finally(() => setLoadingMore(false));
-  }, [loadingMore, hasMore, offset, sort, tab, followedIds]);
+  }, [loadingMore, hasMore, offset, sort, tab, followedIds, discoverSeed]);
 
   const filteredItems = useMemo(() => {
     let result = items
@@ -226,11 +236,8 @@ export default function FeedPage() {
   }, [filteredItems, followedIds]);
 
   const displayItems = useMemo(() => {
-    const base = digestMode ? digestItems : filteredItems;
-    if (freshPicks.length === 0) return base;
-    const pickLinks = new Set(freshPicks.map((p) => p.link));
-    return base.filter((item) => !pickLinks.has(item.link));
-  }, [digestMode, digestItems, filteredItems, freshPicks]);
+    return digestMode ? digestItems : filteredItems;
+  }, [digestMode, digestItems, filteredItems]);
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 py-4">
@@ -273,28 +280,6 @@ export default function FeedPage() {
           >
             View Digest
           </button>
-        </div>
-      )}
-
-      {freshPicks.length > 0 && !loading && !digestMode && (
-        <div className="mx-4 mb-6 rounded-lg border border-zinc-800 bg-zinc-800/50 p-4">
-          <h2 className="mb-3 text-xs font-medium text-zinc-500">Fresh since your last visit</h2>
-          <div className="space-y-2">
-            {freshPicks.map((item, i) => (
-              <ArticleCard
-                key={`fresh-${item.link}-${i}`}
-                item={item}
-                onRemoveSource={(src) => {
-                  const next = [...local.removedSources, src];
-                  localStorage.setItem("ic:removedSources", JSON.stringify(next));
-                  window.dispatchEvent(new Event("ic:removedSources-updated"));
-                }}
-                hidden={false}
-                vote={local.votes[item.link] ?? 0}
-                showAddSource={tab !== "your"}
-              />
-            ))}
-          </div>
         </div>
       )}
 
@@ -357,6 +342,8 @@ export default function FeedPage() {
               >
                 {loadingMore ? "Loading..." : "Load More"}
               </button>
+            ) : tab === "feed" ? (
+              <p className="text-sm text-zinc-500">You have seen everything — check back later or explore collections.</p>
             ) : (
               <p className="text-sm text-zinc-500">You are all caught up!</p>
             )}
