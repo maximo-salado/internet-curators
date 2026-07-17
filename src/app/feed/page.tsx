@@ -110,7 +110,7 @@ export default function FeedPage() {
         const seen = getSeenSources();
         const boosted = boostUnseen(pageItems, seen);
         setItems(boosted);
-        setFreshPicks(getFreshPicks(pageItems, seen));
+        setFreshPicks(getFreshPicks(pageItems));
         setTotal(data.total ?? 0);
         setHasMore(data.hasMore ?? false);
         setOffset(PAGE_SIZE);
