@@ -55,6 +55,8 @@ export default function FeedPage() {
   );
   const [nudgeData, setNudgeData] = useState<{ currentTopic: string; suggestedTopic: string; suggestedSourceId: string } | null>(null);
   const nudgeShownRef = useRef(typeof window !== "undefined" && sessionStorage.getItem("ic:nudge-shown") === "1");
+  const [digestMode, setDigestMode] = useState(false);
+  const [showDigestBanner, setShowDigestBanner] = useState(false);
 
   const syncLocal = useCallback(() => setLocal(readLocalStorage()), []);
 
@@ -76,6 +78,15 @@ export default function FeedPage() {
       window.removeEventListener("ic:followed-updated", onFollowedUpdated);
     };
   }, [syncLocal, onFollowedUpdated]);
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const lastVisit = localStorage.getItem("ic:last-visit-date");
+    if (lastVisit && lastVisit !== today && followedIds.length > 0) {
+      setShowDigestBanner(true);
+    }
+    localStorage.setItem("ic:last-visit-date", today);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setLoading(true);
@@ -192,6 +203,24 @@ export default function FeedPage() {
     return result;
   }, [items, local, tab, sort]);
 
+  const digestItems = useMemo(() => {
+    const seenCurators = new Set<string>();
+    const result: FeedItem[] = [];
+    for (const item of filteredItems) {
+      for (const id of item.curatorIds) {
+        if (!seenCurators.has(id)) {
+          seenCurators.add(id);
+          result.push(item);
+          break;
+        }
+      }
+      if (seenCurators.size >= followedIds.length) break;
+    }
+    return result;
+  }, [filteredItems, followedIds]);
+
+  const displayItems = digestMode ? digestItems : filteredItems;
+
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 py-4">
       <CuratorStories />
@@ -213,10 +242,30 @@ export default function FeedPage() {
             <option value="latest">Latest</option>
             <option value="popular">Popular</option>
           </select>
+          {showDigestBanner && tab === "your" && (
+            <button
+              onClick={() => { setDigestMode((d) => !d); setShowDigestBanner(false); }}
+              className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+            >
+              {digestMode ? "Full Feed" : "Daily Digest"}
+            </button>
+          )}
         </div>
       </div>
 
-      {freshPicks.length > 0 && !loading && (
+      {showDigestBanner && tab === "your" && !digestMode && followedIds.length > 0 && (
+        <div className="mx-4 mb-4 rounded-lg border border-zinc-700 bg-zinc-800/60 px-4 py-3 flex items-center justify-between">
+          <p className="text-xs text-zinc-400">Welcome back! Try the Daily Digest for a quick recap from your curators.</p>
+          <button
+            onClick={() => { setDigestMode(true); setShowDigestBanner(false); }}
+            className="ml-3 whitespace-nowrap rounded-md bg-zinc-700 px-3 py-1 text-xs text-zinc-200 hover:bg-zinc-600 transition-colors"
+          >
+            View Digest
+          </button>
+        </div>
+      )}
+
+      {freshPicks.length > 0 && !loading && !digestMode && (
         <div className="mx-4 mb-6 rounded-lg border border-zinc-800 bg-zinc-800/50 p-4">
           <h2 className="mb-3 text-xs font-medium text-zinc-500">Fresh since your last visit</h2>
           <div className="space-y-2">
@@ -248,14 +297,14 @@ export default function FeedPage() {
             </div>
           ))}
         </div>
-      ) : filteredItems.length === 0 ? (
+      ) : displayItems.length === 0 ? (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-12 text-center">
           <p className="text-zinc-400">No articles yet.</p>
           <p className="mt-2 text-sm text-zinc-600">Curators are building their collections. Check back soon.</p>
         </div>
       ) : (
         <div className="px-4 space-y-2">
-          {filteredItems.map((item, i) => (
+          {displayItems.map((item, i) => (
             <ArticleCard
               key={`${item.link}-${i}`}
               item={item}
@@ -267,10 +316,11 @@ export default function FeedPage() {
               hidden={false}
               vote={local.votes[item.link] ?? 0}
               showAddSource={tab !== "your"}
+              compact={digestMode}
             />
           ))}
 
-          {nudgeData && (
+          {nudgeData && !digestMode && (
             <div className="border-t border-zinc-800 py-4 text-center">
               <p className="text-xs text-zinc-500">
                 You have been reading a lot of {nudgeData.currentTopic}.{" "}
@@ -286,7 +336,7 @@ export default function FeedPage() {
 
           <div className="py-6 text-center">
             <p className="text-xs text-zinc-600 mb-3">
-              Showing {filteredItems.length} of {total} articles
+              Showing {displayItems.length} of {total} articles
             </p>
             {hasMore ? (
               <button
