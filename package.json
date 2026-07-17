@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.110.5",
     "dompurify": "^3.4.12",
     "next": "16.2.10",
+    "pg": "^8.22.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "rss-parser": "^3.13.0"
