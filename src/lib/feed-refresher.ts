@@ -3,6 +3,42 @@ import Parser from "rss-parser";
 
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
+// --- Taxonomy keyword matching ---
+interface TagKeyword {
+  tag_id: string;
+  keywords: string[];
+}
+
+let tagKeywordsCache: TagKeyword[] | null = null;
+
+async function loadTagKeywords(supabase: any): Promise<TagKeyword[]> {
+  if (tagKeywordsCache) return tagKeywordsCache;
+  const { data } = await supabase
+    .from("tags")
+    .select("id, keywords")
+    .in("facet", ["topic", "voice"])
+    .not("keywords", "eq", "{}");
+  tagKeywordsCache = (data ?? []).map((t: any) => ({
+    tag_id: t.id,
+    keywords: t.keywords,
+  }));
+  return tagKeywordsCache!;
+}
+
+function matchKeywords(text: string, tagKeywords: TagKeyword[]): string[] {
+  const lower = text.toLowerCase();
+  const matches: string[] = [];
+  for (const tk of tagKeywords) {
+    for (const kw of tk.keywords) {
+      if (lower.includes(kw.toLowerCase())) {
+        matches.push(tk.tag_id);
+        break;
+      }
+    }
+  }
+  return matches;
+}
+
 function extractFirstImg(html: string | undefined): string | undefined {
   if (!html) return undefined;
   const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
@@ -99,6 +135,34 @@ export async function refreshStaleSources(sources: RefreshSource[]): Promise<voi
             onConflict: "source_id,link",
             ignoreDuplicates: false,
           });
+
+          // --- Tag resolution (keyword-matched only — inherited tags resolve at query time) ---
+          const tagKeywords = await loadTagKeywords(serviceClient);
+          const searchText = [article.title, article.content_snippet ?? ""].join(" ");
+          const keywordTagIds = matchKeywords(searchText, tagKeywords);
+
+          if (keywordTagIds.length > 0) {
+            const { data: existingArticle } = await serviceClient
+              .from("articles")
+              .select("id")
+              .eq("source_id", source.id)
+              .eq("link", article.link)
+              .single();
+
+            if (existingArticle) {
+              await serviceClient
+                .from("article_tags")
+                .delete()
+                .eq("article_id", existingArticle.id);
+
+              const tagRows = keywordTagIds.map((tag_id) => ({
+                article_id: existingArticle.id,
+                tag_id,
+              }));
+
+              await serviceClient.from("article_tags").insert(tagRows);
+            }
+          }
         }
 
         await serviceClient
