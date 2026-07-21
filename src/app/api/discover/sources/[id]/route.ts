@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { refreshStaleSources } from "@/lib/feed-refresher";
 import { NextResponse } from "next/server";
 
 export async function PATCH(
@@ -101,6 +102,28 @@ export async function PATCH(
       if (insertErr) {
         return NextResponse.json({ error: insertErr.message }, { status: 500 });
       }
+    }
+
+    // Fetch articles for the newly approved source immediately
+    try {
+      const { data: sourceRows } = await supabase
+        .from("sources")
+        .select("id, feed_url, last_fetched_at")
+        .eq("feed_url", source.feed_url)
+        .limit(1);
+
+      if (sourceRows?.[0]) {
+        await refreshStaleSources([{
+          id: sourceRows[0].id,
+          feed_url: sourceRows[0].feed_url,
+          last_fetched_at: null,
+        }]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch articles for approved source", {
+        feed_url: source.feed_url,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     await supabase
