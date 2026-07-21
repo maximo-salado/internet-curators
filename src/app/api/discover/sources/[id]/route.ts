@@ -39,6 +39,18 @@ export async function PATCH(
   const prev = source.status;
   const now = new Date().toISOString();
 
+  // Resolve system curator for platform collections
+  const { data: systemCurator } = await supabase
+    .from("curators")
+    .select("id")
+    .eq("display_name", "Editorial Board")
+    .is("user_id", null)
+    .single();
+
+  if (!systemCurator) {
+    return NextResponse.json({ error: "System curator not configured" }, { status: 500 });
+  }
+
   // --- APPROVE → main sources table ---
   if (action === "approve") {
     // Cleanup from previous state
@@ -46,12 +58,12 @@ export async function PATCH(
       await supabase.from("rejected_sources").delete().eq("feed_url", source.feed_url);
     }
 
-    // Find or create "Internet Curators Picks" collection
+    // Find or create "Editor's Picks" collection under the system curator
     const { data: collections } = await supabase
       .from("collections")
       .select("id")
-      .eq("curator_id", curator.id)
-      .eq("name", "Internet Curators Picks")
+      .eq("curator_id", systemCurator.id)
+      .eq("name", "Editor's Picks")
       .limit(1);
 
     let collectionId: string;
@@ -61,9 +73,9 @@ export async function PATCH(
       const { data: newCol, error: colErr } = await supabase
         .from("collections")
         .insert({
-          curator_id: curator.id,
-          name: "Internet Curators Picks",
-          slug: `ic-picks-${Date.now()}`,
+          curator_id: systemCurator.id,
+          name: "Editor's Picks",
+          slug: `editors-picks-${Date.now()}`,
           description: "Editor-approved sources from the discovery pipeline.",
           published: true,
         })
