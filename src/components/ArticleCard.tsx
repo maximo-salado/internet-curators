@@ -19,6 +19,7 @@ interface FeedItem {
   image?: string;
   upvotes?: number;
   downvotes?: number;
+  tags?: { id: string; name: string; slug: string; facet: string }[];
 }
 
 interface ArticleCardProps {
@@ -209,6 +210,28 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource,
             </span>
           )}
         </div>
+
+        {item.tags && item.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {item.tags
+              .filter((t) => t.facet === "topic" || t.facet === "voice")
+              .slice(0, 4)
+              .map((tag) => (
+                <Link
+                  key={tag.id}
+                  href={`/feed?tags=${tag.slug}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] transition-colors ${
+                    tag.facet === "voice"
+                      ? "text-zinc-600 border border-zinc-800 hover:text-zinc-400"
+                      : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300"
+                  }`}
+                >
+                  {tag.name}
+                </Link>
+              ))}
+          </div>
+        )}
 
         {/* Title + snippet — middle */}
         <div className={hasImage ? "mt-auto" : "mt-3"}>
