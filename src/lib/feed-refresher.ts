@@ -9,6 +9,40 @@ function extractFirstImg(html: string | undefined): string | undefined {
   return match?.[1];
 }
 
+/**
+ * rss-parser / xml2js can produce object trees instead of strings for Atom XHTML
+ * content (e.g. <title type="xhtml"><div>...</div></title>). This walks the tree
+ * to recover the plain text. Falls back to empty string for unrecognised shapes.
+ */
+function extractText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return "";
+  const obj = value as Record<string, unknown>;
+  // leaf text node
+  if (typeof obj._ === "string") return obj._;
+  // recurse over children, skip attribute blocks (key === "$")
+  let text = "";
+  for (const [key, val] of Object.entries(obj)) {
+    if (key === "$") continue;
+    if (Array.isArray(val)) {
+      for (const v of val) text += extractText(v);
+    } else if (typeof val === "object") {
+      text += extractText(val);
+    }
+  }
+  return text;
+}
+
+/**
+ * xml2js Builder adds namespace prefixes (e.g. <default:div>) when rebuilding
+ * XHTML content. Strip those so the HTML is valid for browser rendering.
+ */
+function cleanXhtmlContent(html: string): string {
+  return html
+    .replace(/<\/?default:/g, "</")
+    .replace(/<\/?[a-z]+:/g, "</");
+}
+
 export type RefreshSource = {
   id: string;
   feed_url: string;
@@ -49,11 +83,13 @@ export async function refreshStaleSources(sources: RefreshSource[]): Promise<voi
 
           const article = {
             source_id: source.id,
-            title: item.title ?? "Untitled",
+            title: extractText(item.title) || "Untitled",
             link: item.link ?? "",
             pub_date: item.pubDate ?? item.isoDate ?? new Date().toISOString(),
-            content_snippet: (item.contentSnippet ?? "").slice(0, 500),
-            content: (item as any)["content:encoded"] || item.content || item.contentSnippet || "",
+            content_snippet: (extractText(item.contentSnippet) || "").slice(0, 500),
+            content: cleanXhtmlContent(
+              (item as any)["content:encoded"] || item.content || item.contentSnippet || ""
+            ),
             image: img ?? null,
           };
 
