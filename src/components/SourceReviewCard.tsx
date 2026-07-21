@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { TagSelector } from "./TagSelector";
 
 interface Tag {
   id: string;
@@ -55,12 +56,33 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const sig = source.independence_signals;
 
+  const DRAFT_KEY = `ic:source-tags:${source.id}`;
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) setSelectedTagIds(new Set(JSON.parse(saved)));
+    } catch {}
+  }, []);
+
   useEffect(() => {
     fetch("/api/tags")
       .then((r) => r.json())
       .then((data) => setAllTags(data.tags ?? []))
       .catch(() => {});
   }, []);
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds((prev) => {
+      const next = new Set(prev);
+      prev.has(tagId) ? next.delete(tagId) : next.add(tagId);
+      return next;
+    });
+    // Write to localStorage after state update (not inside the updater — must be pure)
+    const next = new Set(selectedTagIds);
+    next.has(tagId) ? next.delete(tagId) : next.add(tagId);
+    localStorage.setItem(DRAFT_KEY, JSON.stringify([...next]));
+  };
 
   const handleAction = async (action: "approve" | "reject" | "pending") => {
     if (loading || !isEditor) return;
@@ -75,6 +97,9 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
         }),
       });
       if (!res.ok) return;
+      if (action === "approve" || action === "reject") {
+        localStorage.removeItem(DRAFT_KEY);
+      }
       onTransition(source.id, action);
     } catch {
       // Network error — user can retry
@@ -160,86 +185,12 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
       {isEditor && allTags.length > 0 && (
         <div className="mt-2 border-t border-zinc-800 pt-2">
           <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">Assign Tags</p>
-
-          {/* Topic: suppress parent tags; render child tags grouped under their parent's name */}
-          {(() => {
-            const parents = allTags.filter((t) => t.facet === "topic" && t.parent_id === null);
-            const children = allTags.filter((t) => t.facet === "topic" && t.parent_id !== null);
-            if (children.length === 0) return null;
-            return (
-              <div className="mb-1">
-                <span className="text-[9px] text-zinc-600 mr-1">topic:</span>
-                {parents.map((parent) => {
-                  const group = children.filter((c) => c.parent_id === parent.id);
-                  if (group.length === 0) return null;
-                  return (
-                    <div key={parent.id} className="mt-1">
-                      <span className="text-[8px] text-zinc-700 uppercase tracking-wider">{parent.name}</span>
-                      <div className="flex flex-wrap gap-1 mt-0.5">
-                        {group.map((tag) => {
-                          const isSelected = selectedTagIds.has(tag.id);
-                          return (
-                            <button
-                              key={tag.id}
-                              onClick={() => {
-                                setSelectedTagIds((prev) => {
-                                  const next = new Set(prev);
-                                  isSelected ? next.delete(tag.id) : next.add(tag.id);
-                                  return next;
-                                });
-                              }}
-                              className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
-                                isSelected
-                                  ? "bg-green-900/50 text-green-300 border border-green-800"
-                                  : "bg-zinc-800 text-zinc-500 border border-zinc-700 hover:border-zinc-600"
-                              }`}
-                            >
-                              {tag.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
-
-          {/* Stance + Format: flat lists (no parent/child hierarchy) */}
-          {["stance", "format"].map((facet) => {
-            const facetTags = allTags.filter((t) => t.facet === facet && t.parent_id === null);
-            if (facetTags.length === 0) return null;
-            return (
-              <div key={facet} className="mb-1">
-                <span className="text-[9px] text-zinc-600 mr-1">{facet}:</span>
-                <div className="flex flex-wrap gap-1">
-                  {facetTags.map((tag) => {
-                    const isSelected = selectedTagIds.has(tag.id);
-                    return (
-                      <button
-                        key={tag.id}
-                        onClick={() => {
-                          setSelectedTagIds((prev) => {
-                            const next = new Set(prev);
-                            isSelected ? next.delete(tag.id) : next.add(tag.id);
-                            return next;
-                          });
-                        }}
-                        className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
-                          isSelected
-                            ? "bg-green-900/50 text-green-300 border border-green-800"
-                            : "bg-zinc-800 text-zinc-500 border border-zinc-700 hover:border-zinc-600"
-                        }`}
-                      >
-                        {tag.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+          <TagSelector
+            allTags={allTags}
+            selectedTagIds={selectedTagIds}
+            onToggle={toggleTag}
+            facets={["topic", "stance", "format"]}
+          />
         </div>
       )}
 
