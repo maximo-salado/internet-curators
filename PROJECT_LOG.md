@@ -82,3 +82,31 @@ KB: [[Internet Curators - RSS Discovery Index]] updated with full decisions
 - 174 OK (72%), 67 dead (28%)
   - 42 HTTP errors (mostly 404), 20 not-RSS (JS sites), 3 DNS failures, 1 timeout
 - Validates filter-first approach — dead feeds never reach review queue
+
+## 2026-07-20 — Discovery Pipeline Phase 2 (Hermes session)
+
+Agent: Hermes (deepseek-v4-pro)
+PR: #58 merged to main, deployed
+Plan: `.hermes/plans/2026-07-20-discovery-pipeline-phase2.md` (Claude-reviewed)
+Issues: #49–#57
+
+### Built
+- Migration 011: categories + tags tables, service_role RLS policies for cron jobs
+- Migration 012: system curator "Editorial Board", `curators.user_id` made nullable
+- Collection name fix: "Editor's Picks" (replaces placeholder product name)
+- L0 feed health validator skill (`ic-feed-health`): curl-based RSS validation
+- 3 weekly cron jobs (Telegram delivery):
+  - Sat 9am: Directory Crawling (blogroll.org + ooh.directory)
+  - Sun 9am: Platform Sitemaps (Bear Blog + Micro.blog)
+  - Mon 9am: Web Search Combos (site: searches + keyword combos)
+- Forgot-password flow: /forgot-password → /reset-password
+- Each cron job: L0 health → skip guard → L1 quality → L2 blocklist → L3 signals → category/tags → INSERT pending
+- Cap: 25/job, 10% Spanish, intra-run dedup, resume guard
+
+### Seed audit
+- 216 sources filtered: 131 passed → discovered_sources pending, 72 rejected, 8 skipped, 5 errors
+- "Internet Curators Seed" curator + 21 collections deleted
+- Final DB: 156 discovered_sources, 73 rejected_sources, 1 curator (maximogomez, editor)
+
+### Deferred
+- Mastodon/Lemmy, GitHub, Reddit/HN, blogroll crawling, filter learning, blocklist as public resource
