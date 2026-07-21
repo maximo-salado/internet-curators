@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SourceFollowButton } from "@/components/SourceFollowButton";
+import { SourceTagEditor } from "@/components/SourceTagEditor";
+import { TagSelector } from "@/components/TagSelector";
 
 export const revalidate = 300;
 
@@ -23,6 +25,29 @@ export default async function SourcePage({
 
   const { data: { user } } = await supabase.auth.getUser();
   const isLoggedIn = !!user;
+
+  let isEditor = false;
+  if (user) {
+    const { data: curator } = await supabase
+      .from("curators")
+      .select("role")
+      .eq("user_id", user.id)
+      .single();
+    isEditor = curator?.role === "editor";
+  }
+
+  const { data: sourceTags } = await supabase
+    .from("source_tags")
+    .select("tag_id")
+    .eq("source_id", id);
+
+  const sourceTagIds = (sourceTags ?? []).map((st: any) => st.tag_id as string);
+
+  const { data: allTags } = await supabase
+    .from("tags")
+    .select("id, name, slug, facet, parent_id")
+    .order("facet")
+    .order("display_order");
 
   const { data: articles } = await supabase
     .from("articles")
@@ -81,6 +106,25 @@ export default async function SourcePage({
           {(articles ?? []).length} articles · Added{" "}
           {new Date(source.created_at).toLocaleDateString()}
         </p>
+
+        {isEditor ? (
+          <SourceTagEditor
+            sourceId={source.id}
+            initialTagIds={sourceTagIds}
+            allTags={allTags ?? []}
+          />
+        ) : sourceTagIds.length > 0 ? (
+          <div className="mt-4 border-t border-zinc-800 pt-3">
+            <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">Tags</p>
+            <TagSelector
+              allTags={allTags ?? []}
+              selectedTagIds={new Set(sourceTagIds)}
+              onToggle={() => {}}
+              facets={["topic", "stance", "format"]}
+              readonly
+            />
+          </div>
+        ) : null}
       </div>
 
       {uniquePublished.length > 0 ? (
