@@ -86,6 +86,8 @@ export default function FeedPage() {
   const nudgeShownRef = useRef(typeof window !== "undefined" && sessionStorage.getItem("ic:nudge-shown") === "1");
   const [digestMode, setDigestMode] = useState(false);
   const [showDigestBanner, setShowDigestBanner] = useState(false);
+  const [nextRefresh, setNextRefresh] = useState<number | null>(null);
+  const refreshStartRef = useRef(Date.now());
 
   // --- Discovery Sources mode ---
   const [discoverMode, setDiscoverMode] = useState<DiscoverMode>("articles");
