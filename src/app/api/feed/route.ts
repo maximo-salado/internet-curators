@@ -14,6 +14,7 @@ interface FeedItem {
   curatorIds: string[];
   contentSnippet: string;
   image?: string;
+  tags?: { id: string; name: string; slug: string; facet: string }[];
 }
 
 function mulberry32(a: number) {
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
   const seed = searchParams.get("seed");
   const offset = Math.max(0, parseInt(searchParams.get("offset") ?? "0", 10) || 0);
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20));
+  const tagSlugs = searchParams.get("tags")?.split(",").filter(Boolean) ?? [];
 
   // "Your Feed" mode — only user's own sources + followed
   // "Discover" mode — everything EXCEPT user's own sources
@@ -155,6 +157,86 @@ export async function GET(req: Request) {
 
   let rawItems = Array.from(seen.values());
 
+  // 3.5. Filter by tags (articles must have ALL specified tags)
+  if (tagSlugs.length > 0) {
+    const { data: directFilterTags } = await supabase
+      .from("tags")
+      .select("id, slug, parent_id")
+      .in("slug", tagSlugs);
+
+    if (!directFilterTags?.length) {
+      return NextResponse.json({ items: [], total: 0, hasMore: false });
+    }
+
+    const directIds = directFilterTags.map((t: any) => t.id);
+    const { data: childTags } = await supabase
+      .from("tags")
+      .select("id, parent_id")
+      .in("parent_id", directIds);
+
+    const slugToEffectiveIds = new Map<string, string[]>();
+    for (const ft of directFilterTags) {
+      const children = (childTags ?? []).filter((c: any) => c.parent_id === ft.id);
+      slugToEffectiveIds.set(ft.slug, children.length > 0 ? children.map((c: any) => c.id) : [ft.id]);
+    }
+
+    const allFilterTagIds = [...new Set([...slugToEffectiveIds.values()].flat())];
+
+    const articleLinks = rawItems.map((i) => i.link);
+
+    const { data: keywordTags } = await supabase
+      .from("article_tags")
+      .select("tag_id, articles!inner(link)")
+      .in("tag_id", allFilterTagIds)
+      .in("articles.link", articleLinks);
+
+    // sourceId is confirmed present on rawItems (field added at feed/route.ts:143)
+    const pageSourceIds = [...new Set(
+      rawItems.map((i) => (i as any).sourceId).filter(Boolean)
+    )];
+
+    const { data: inheritedTags } = await supabase
+      .from("source_tags")
+      .select("tag_id, source_id")
+      .in("tag_id", allFilterTagIds)
+      .in("source_id", pageSourceIds);
+
+    const articleTagMap = new Map<string, Set<string>>();
+
+    for (const kt of keywordTags ?? []) {
+      const link = (kt.articles as any)?.link;
+      if (!link) continue;
+      if (!articleTagMap.has(link)) articleTagMap.set(link, new Set());
+      articleTagMap.get(link)!.add(kt.tag_id);
+    }
+
+    const sourceIdToLinks = new Map<string, string[]>();
+    for (const item of rawItems) {
+      const sid = (item as any).sourceId;
+      if (!sid) continue;
+      if (!sourceIdToLinks.has(sid)) sourceIdToLinks.set(sid, []);
+      sourceIdToLinks.get(sid)!.push(item.link);
+    }
+
+    for (const it of inheritedTags ?? []) {
+      const links = sourceIdToLinks.get(it.source_id) ?? [];
+      for (const link of links) {
+        if (!articleTagMap.has(link)) articleTagMap.set(link, new Set());
+        articleTagMap.get(link)!.add(it.tag_id);
+      }
+    }
+
+    const matchingLinks = new Set<string>();
+    for (const [link, tagSet] of articleTagMap) {
+      const allMatch = [...slugToEffectiveIds.values()].every((ids) =>
+        ids.some((id) => tagSet.has(id))
+      );
+      if (allMatch) matchingLinks.add(link);
+    }
+
+    rawItems = rawItems.filter((item) => matchingLinks.has(item.link));
+  }
+
   // 4. "Your Feed" filter — only user's own sources + followed
   if (feedMode === "your") {
     if (!userCuratorId) {
@@ -207,11 +289,12 @@ export async function GET(req: Request) {
     }
   }
 
-  // 8. Attach vote counts (fetch for the requested page only)
+  // 8. Attach vote counts and tags (fetch for the requested page only)
   const total = items.length;
   const page = items.slice(offset, offset + limit);
   const hasMore = offset + limit < total;
   const links = page.map((i) => i.link);
+
   const { data: votes } = await supabase
     .from("article_votes")
     .select("link, upvotes, downvotes")
@@ -222,13 +305,50 @@ export async function GET(req: Request) {
     voteMap.set(v.link, { upvotes: v.upvotes, downvotes: v.downvotes });
   }
 
-  const withVotes = page.map((item) => ({
-    ...item,
-    upvotes: voteMap.get(item.link)?.upvotes ?? 0,
-    downvotes: voteMap.get(item.link)?.downvotes ?? 0,
-  }));
+  // Attach tags — union of keyword-matched (article_tags) + inherited (source_tags)
+  const pageSourceIds = [...new Set(page.map((i) => i.sourceId).filter(Boolean))];
 
-  return NextResponse.json({ items: withVotes, total, hasMore });
+  const { data: articleTags } = await supabase
+    .from("article_tags")
+    .select("tag_id, articles!inner(link), tags(id, name, slug, facet)")
+    .in("articles.link", links);
+
+  const { data: sourceTags } = await supabase
+    .from("source_tags")
+    .select("source_id, tag_id, tags(id, name, slug, facet)")
+    .in("source_id", pageSourceIds);
+
+  const sourceTagMap = new Map<string, { id: string; name: string; slug: string; facet: string }[]>();
+  for (const st of sourceTags ?? []) {
+    if (!sourceTagMap.has(st.source_id)) sourceTagMap.set(st.source_id, []);
+    sourceTagMap.get(st.source_id)!.push(st.tags as any);
+  }
+
+  const keywordTagMap = new Map<string, { id: string; name: string; slug: string; facet: string }[]>();
+  for (const at of articleTags ?? []) {
+    const link = (at.articles as any)?.link;
+    if (!link) continue;
+    if (!keywordTagMap.has(link)) keywordTagMap.set(link, []);
+    keywordTagMap.get(link)!.push(at.tags as any);
+  }
+
+  const withTags = page.map((item) => {
+    const keyword = keywordTagMap.get(item.link) ?? [];
+    const inherited = sourceTagMap.get(item.sourceId) ?? [];
+    const seen = new Set<string>();
+    const merged: { id: string; name: string; slug: string; facet: string }[] = [];
+    for (const t of [...keyword, ...inherited]) {
+      if (t && !seen.has(t.id)) { seen.add(t.id); merged.push(t); }
+    }
+    return {
+      ...item,
+      upvotes: voteMap.get(item.link)?.upvotes ?? 0,
+      downvotes: voteMap.get(item.link)?.downvotes ?? 0,
+      tags: merged,
+    };
+  });
+
+  return NextResponse.json({ items: withTags, total, hasMore });
 }
 
 // Triggered by a cron job or manual call to refresh stale RSS sources into the articles cache.
