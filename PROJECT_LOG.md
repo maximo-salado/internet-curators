@@ -61,3 +61,24 @@ Commits: 19d97c5, d0f86b5, (migration 008)
 | OpenCode Go | M2-M4, M7-M9, L1-L8: 13 fixes | 1c386173 |
 
 Total: 26/26 audit issues resolved. Build passes clean.
+
+## 2026-07-18 — Discovery Pipeline Design Decisions (Hermes session)
+
+Agent: Hermes (deepseek-v4-pro)
+Scope: Research & decisions — no code written
+KB: [[Internet Curators - RSS Discovery Index]] updated with full decisions
+
+### Decisions locked
+- Rejection filters: 4 layers (technical → quality → values → soft signals)
+- Categories (generic: gaming, music, design) vs Tags (taste: indie, progressive, mainstream)
+- Seed audit: all 216 sources through filter, survivors → pending, rejections removed
+- Seed-user + all collections deleted. Max starts fresh with own curator
+- Pipeline: weekly, 50/week cap, 10% Spanish, multiple specialized cron jobs
+- OPML import: stays instant for users, also feeds discovery pipeline as signal
+- Fediverse discovery + filter learning: deferred
+
+### Source health audit
+- 241 feeds checked (216 sources + 25 discovered)
+- 174 OK (72%), 67 dead (28%)
+  - 42 HTTP errors (mostly 404), 20 not-RSS (JS sites), 3 DNS failures, 1 timeout
+- Validates filter-first approach — dead feeds never reach review queue
