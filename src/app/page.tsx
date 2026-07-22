@@ -218,8 +218,8 @@ export default function HomePage() {
       {/* Discover tab */}
       {tab === "discover" && (
         <>
-          <FiltersBar />
           <WelcomeBanner />
+          <FiltersBar />
 
           {loading ? (
             <div className="px-4 mt-4 space-y-4">

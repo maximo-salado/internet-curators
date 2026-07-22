@@ -9,7 +9,7 @@ export async function PATCH(
   const supabase = await createClient();
   const { id } = await params;
   const body = await req.json();
-  const action = body.action as "approve" | "reject" | "pending";
+  const action = body.action as "approve" | "reject" | "pending" | "parked";
   const reason = (body.reason as string) ?? "";
   const tagIds = (body.tag_ids as string[]) ?? [];
 
@@ -187,6 +187,22 @@ export async function PATCH(
       .eq("id", id);
 
     return NextResponse.json({ success: true, action: "pending" });
+  }
+
+  // --- PARKED → shelve for later, clean up artifacts ---
+  if (action === "parked") {
+    if (prev === "approved") {
+      await supabase.from("sources").delete().eq("feed_url", source.feed_url);
+    } else if (prev === "rejected") {
+      await supabase.from("rejected_sources").delete().eq("feed_url", source.feed_url);
+    }
+
+    await supabase
+      .from("discovered_sources")
+      .update({ status: "parked", reviewed_at: now, reviewed_by: curator.id })
+      .eq("id", id);
+
+    return NextResponse.json({ success: true, action: "parked" });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
