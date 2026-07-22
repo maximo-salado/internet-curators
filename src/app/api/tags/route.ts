@@ -1,14 +1,22 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(req: Request) {
   const supabase = await createClient();
+  const { searchParams } = new URL(req.url);
+  const facet = searchParams.get("facet");
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("tags")
     .select("id, name, slug, facet, parent_id, display_order")
     .order("facet")
     .order("display_order");
+
+  if (facet) {
+    query = query.eq("facet", facet);
+  }
+
+  const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

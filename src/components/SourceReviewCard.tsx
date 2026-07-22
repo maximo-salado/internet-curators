@@ -84,7 +84,7 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
     localStorage.setItem(DRAFT_KEY, JSON.stringify([...next]));
   };
 
-  const handleAction = async (action: "approve" | "reject" | "pending") => {
+  const handleAction = async (action: "approve" | "reject" | "pending" | "parked") => {
     if (loading || !isEditor) return;
     setLoading(true);
     try {
@@ -97,7 +97,7 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
         }),
       });
       if (!res.ok) return;
-      if (action === "approve" || action === "reject") {
+      if (action === "approve" || action === "reject" || action === "parked") {
         localStorage.removeItem(DRAFT_KEY);
       }
       onTransition(source.id, action);
@@ -207,6 +207,10 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
                 className="flex-1 rounded-lg bg-red-900/30 border border-red-800 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-900/50 transition-colors disabled:opacity-50">
                 ✗ Reject
               </button>
+              <button onClick={() => handleAction("parked")} disabled={loading}
+                className="rounded-lg bg-amber-900/30 border border-amber-800 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-900/50 transition-colors disabled:opacity-50">
+                ⏸ Park
+              </button>
             </>
           )}
           {source.status === "approved" && (
@@ -220,6 +224,10 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
                 className="rounded-lg bg-red-900/30 border border-red-800 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-900/50 transition-colors disabled:opacity-50">
                 ✗ Reject
               </button>
+              <button onClick={() => handleAction("parked")} disabled={loading}
+                className="rounded-lg bg-amber-900/30 border border-amber-800 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-900/50 transition-colors disabled:opacity-50">
+                ⏸ Park
+              </button>
             </>
           )}
           {source.status === "rejected" && (
@@ -232,6 +240,19 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
               <button onClick={() => handleAction("approve")} disabled={loading}
                 className="rounded-lg bg-green-900/30 border border-green-800 px-3 py-2 text-xs font-medium text-green-400 hover:bg-green-900/50 transition-colors disabled:opacity-50">
                 ✓ Approve
+              </button>
+              <button onClick={() => handleAction("parked")} disabled={loading}
+                className="rounded-lg bg-amber-900/30 border border-amber-800 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-900/50 transition-colors disabled:opacity-50">
+                ⏸ Park
+              </button>
+            </>
+          )}
+          {source.status === "parked" && (
+            <>
+              <span className="text-xs font-medium text-amber-400 self-center mr-auto">⏸ Parked</span>
+              <button onClick={() => handleAction("pending")} disabled={loading}
+                className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-400 hover:bg-zinc-700 transition-colors disabled:opacity-50">
+                ↩ Pending
               </button>
             </>
           )}
