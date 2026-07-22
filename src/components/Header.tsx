@@ -237,7 +237,7 @@ function MenuDropdown({
       </Link>
       {isEditor && (
         <Link
-          href="/dashboard"
+          href="/tag-health"
           onClick={onClose}
           className="block px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
         >
