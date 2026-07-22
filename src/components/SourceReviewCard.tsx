@@ -1,6 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { TagSelector } from "./TagSelector";
+
+interface Tag {
+  id: string;
+  name: string;
+  slug: string;
+  facet: string;
+  parent_id: string | null;
+}
 
 interface DiscoveredSource {
   id: string;
@@ -43,18 +52,54 @@ const platformColors: Record<string, string> = {
 
 export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
   const [loading, setLoading] = useState(false);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const sig = source.independence_signals;
 
-  const handleAction = async (action: "approve" | "reject" | "pending") => {
+  const DRAFT_KEY = `ic:source-tags:${source.id}`;
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) setSelectedTagIds(new Set(JSON.parse(saved)));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/tags")
+      .then((r) => r.json())
+      .then((data) => setAllTags(data.tags ?? []))
+      .catch(() => {});
+  }, []);
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds((prev) => {
+      const next = new Set(prev);
+      prev.has(tagId) ? next.delete(tagId) : next.add(tagId);
+      return next;
+    });
+    // Write to localStorage after state update (not inside the updater — must be pure)
+    const next = new Set(selectedTagIds);
+    next.has(tagId) ? next.delete(tagId) : next.add(tagId);
+    localStorage.setItem(DRAFT_KEY, JSON.stringify([...next]));
+  };
+
+  const handleAction = async (action: "approve" | "reject" | "pending" | "parked") => {
     if (loading || !isEditor) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/discover/sources/${source.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({
+          action,
+          ...(action === "approve" ? { tag_ids: [...selectedTagIds] } : {}),
+        }),
       });
       if (!res.ok) return;
+      if (action === "approve" || action === "reject" || action === "parked") {
+        localStorage.removeItem(DRAFT_KEY);
+      }
       onTransition(source.id, action);
     } catch {
       // Network error — user can retry
@@ -136,6 +181,19 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
         </div>
       )}
 
+      {/* Topic + Stance + Format tags (editor-assignable. Voice is article-level, keyword-matched) */}
+      {isEditor && allTags.length > 0 && (
+        <div className="mt-2 border-t border-zinc-800 pt-2">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">Assign Tags</p>
+          <TagSelector
+            allTags={allTags}
+            selectedTagIds={selectedTagIds}
+            onToggle={toggleTag}
+            facets={["topic", "stance", "format"]}
+          />
+        </div>
+      )}
+
       {/* Actions — context-aware per status */}
       {isEditor && (
         <div className="mt-3 flex gap-2 border-t border-zinc-800 pt-3">
@@ -148,6 +206,10 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
               <button onClick={() => handleAction("reject")} disabled={loading}
                 className="flex-1 rounded-lg bg-red-900/30 border border-red-800 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-900/50 transition-colors disabled:opacity-50">
                 ✗ Reject
+              </button>
+              <button onClick={() => handleAction("parked")} disabled={loading}
+                className="rounded-lg bg-amber-900/30 border border-amber-800 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-900/50 transition-colors disabled:opacity-50">
+                ⏸ Park
               </button>
             </>
           )}
@@ -162,6 +224,10 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
                 className="rounded-lg bg-red-900/30 border border-red-800 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-900/50 transition-colors disabled:opacity-50">
                 ✗ Reject
               </button>
+              <button onClick={() => handleAction("parked")} disabled={loading}
+                className="rounded-lg bg-amber-900/30 border border-amber-800 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-900/50 transition-colors disabled:opacity-50">
+                ⏸ Park
+              </button>
             </>
           )}
           {source.status === "rejected" && (
@@ -174,6 +240,19 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
               <button onClick={() => handleAction("approve")} disabled={loading}
                 className="rounded-lg bg-green-900/30 border border-green-800 px-3 py-2 text-xs font-medium text-green-400 hover:bg-green-900/50 transition-colors disabled:opacity-50">
                 ✓ Approve
+              </button>
+              <button onClick={() => handleAction("parked")} disabled={loading}
+                className="rounded-lg bg-amber-900/30 border border-amber-800 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-900/50 transition-colors disabled:opacity-50">
+                ⏸ Park
+              </button>
+            </>
+          )}
+          {source.status === "parked" && (
+            <>
+              <span className="text-xs font-medium text-amber-400 self-center mr-auto">⏸ Parked</span>
+              <button onClick={() => handleAction("pending")} disabled={loading}
+                className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-400 hover:bg-zinc-700 transition-colors disabled:opacity-50">
+                ↩ Pending
               </button>
             </>
           )}

@@ -28,7 +28,7 @@ export function CuratorCard({ curator, isLoggedIn }: CuratorCardProps) {
             {(curator.follower_counts?.count ?? 0) !== 1 ? "s" : ""}
           </p>
         </div>
-        <FollowButton curatorId={curator.id} isLoggedIn={isLoggedIn} />
+        <FollowButton targetType="curator" targetId={curator.id} initialFollowed={false} />
       </div>
     </div>
   );
