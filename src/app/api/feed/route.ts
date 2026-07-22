@@ -55,11 +55,14 @@ export async function GET(req: Request) {
   const feedMode = searchParams.get("feed");
   let userCuratorId: string | null = null;
   let followedIds: string[] = [];
+  let followedSourceIds: string[] = [];
+  let userId: string | null = null;
   let excludeUserSourceIds: string[] | null = null;
 
   if (feedMode === "your" || feedMode === "discover") {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+      userId = user.id;
       const { data: curator } = await supabase
         .from("curators")
         .select("id")
@@ -67,10 +70,19 @@ export async function GET(req: Request) {
         .single();
       if (curator) userCuratorId = curator.id;
     }
-    if (feedMode === "your") {
-      // POC-only: followedIds are passed from the client via query params.
-      // In production, follow relationships should be stored server-side.
-      followedIds = searchParams.get("followed")?.split(",").filter(Boolean) ?? [];
+    if (feedMode === "your" && userId) {
+      const { data: userFollows } = await supabase
+        .from("user_follows")
+        .select("curator_id, source_id")
+        .eq("user_id", userId);
+      followedIds = (userFollows ?? [])
+        .filter((f: any) => f.curator_id)
+        .map((f: any) => f.curator_id);
+      followedSourceIds = (userFollows ?? [])
+        .filter((f: any) => f.source_id)
+        .map((f: any) => f.source_id);
+      const clientFollowed = searchParams.get("followed")?.split(",").filter(Boolean) ?? [];
+      followedIds = [...new Set([...followedIds, ...clientFollowed])];
     }
     if (feedMode === "discover" && userCuratorId) {
       const { data: userSources } = await supabase
@@ -244,8 +256,9 @@ export async function GET(req: Request) {
     }
     rawItems = rawItems.filter((item) => {
       if (item.curatorIds.includes(userCuratorId!)) return true;
-      return item.publishedCurators.size > 0 &&
-        item.curatorIds.some((id) => followedIds.includes(id));
+      if (item.publishedCurators.size > 0 &&
+        item.curatorIds.some((id) => followedIds.includes(id))) return true;
+      return item.sourceId && followedSourceIds.includes(item.sourceId);
     });
   }
 
