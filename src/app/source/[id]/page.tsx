@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { SourceFollowButton } from "@/components/SourceFollowButton";
+import { FollowButton } from "@/components/FollowButton";
 import { SourceTagEditor } from "@/components/SourceTagEditor";
 import { TagSelector } from "@/components/TagSelector";
 
@@ -87,7 +87,7 @@ export default async function SourcePage({
       <div className="mb-10">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">{source.title || "Untitled Source"}</h1>
-          <SourceFollowButton sourceId={source.id} isLoggedIn={isLoggedIn} />
+          {isLoggedIn && <FollowButton targetType="source" targetId={source.id} initialFollowed={false} />}
         </div>
         {source.description && (
           <p className="mt-3 text-zinc-400">{source.description}</p>
