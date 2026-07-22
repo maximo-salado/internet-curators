@@ -9,8 +9,9 @@ export async function PATCH(
   const supabase = await createClient();
   const { id } = await params;
   const body = await req.json();
-  const action = body.action as "approve" | "reject" | "pending";
+  const action = body.action as "approve" | "reject" | "pending" | "parked";
   const reason = (body.reason as string) ?? "";
+  const tagIds = (body.tag_ids as string[]) ?? [];
 
   // Must be an editor
   const { data: { user } } = await supabase.auth.getUser();
@@ -113,6 +114,16 @@ export async function PATCH(
         .limit(1);
 
       if (sourceRows?.[0]) {
+        // Save editor-assigned tags (always clear old tags, then insert if any selected)
+        await supabase.from("source_tags").delete().eq("source_id", sourceRows[0].id);
+        if (tagIds.length > 0) {
+          const tagRows = tagIds.map((tag_id: string) => ({
+            source_id: sourceRows[0].id,
+            tag_id,
+          }));
+          await supabase.from("source_tags").insert(tagRows);
+        }
+
         await refreshStaleSources([{
           id: sourceRows[0].id,
           feed_url: sourceRows[0].feed_url,
@@ -176,6 +187,22 @@ export async function PATCH(
       .eq("id", id);
 
     return NextResponse.json({ success: true, action: "pending" });
+  }
+
+  // --- PARKED → shelve for later, clean up artifacts ---
+  if (action === "parked") {
+    if (prev === "approved") {
+      await supabase.from("sources").delete().eq("feed_url", source.feed_url);
+    } else if (prev === "rejected") {
+      await supabase.from("rejected_sources").delete().eq("feed_url", source.feed_url);
+    }
+
+    await supabase
+      .from("discovered_sources")
+      .update({ status: "parked", reviewed_at: now, reviewed_by: curator.id })
+      .eq("id", id);
+
+    return NextResponse.json({ success: true, action: "parked" });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

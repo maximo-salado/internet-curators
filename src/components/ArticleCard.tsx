@@ -19,6 +19,7 @@ interface FeedItem {
   image?: string;
   upvotes?: number;
   downvotes?: number;
+  tags?: { id: string; name: string; slug: string; facet: string }[];
 }
 
 interface ArticleCardProps {
@@ -100,10 +101,55 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource,
 
   if (hidden) return null;
 
+  const curatorElements = item.curatorNames.length > 0
+    ? item.curatorNames.map((name, i) => ({ name, id: item.curatorIds[i] }))
+    : null;
+
+  const hasImage = !compact && !!item.image;
+
+  const handleVote = (dir: 1 | -1) => {
+    const votes = JSON.parse(localStorage.getItem("ic:votes") ?? "{}") as Record<string, number>;
+    const prev = votes[item.link] ?? 0;
+    const next = prev === dir ? 0 : dir;
+    votes[item.link] = next;
+    localStorage.setItem("ic:votes", JSON.stringify(votes));
+    window.dispatchEvent(new Event("ic:votes-updated"));
+
+    if (prev === 1) setUpCount((c) => c - 1);
+    if (prev === -1) setDownCount((c) => c - 1);
+    if (next === 1) setUpCount((c) => c + 1);
+    if (next === -1) setDownCount((c) => c + 1);
+
+    fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ link: item.link, prev, next }),
+    }).catch(() => {});
+  };
+
+  const handleHide = () => {
+    const hidden = JSON.parse(localStorage.getItem("ic:hidden") ?? "[]") as string[];
+    if (!hidden.includes(item.link)) hidden.push(item.link);
+    localStorage.setItem("ic:hidden", JSON.stringify(hidden));
+    window.dispatchEvent(new Event("ic:hidden-updated"));
+    setConfirming(null);
+  };
+
+  const handleRemoveSource = () => {
+    onRemoveSource(item.sourceTitle);
+    setConfirming(null);
+  };
+
+  // Compact variant — editorial, no container
   if (compact) {
     return (
-      <article className="rounded-lg bg-zinc-900 px-3 py-2">
-        <div className="flex items-start justify-between gap-2">
+      <article ref={cardRef} className="pb-2 border-b border-zinc-800 last:border-b-0">
+        <div className="flex items-start gap-1.5">
+          {read && (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" strokeWidth="2.5" className="mt-0.5 shrink-0">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+          )}
           <div className="min-w-0 flex-1">
             <button
               onClick={() => {
@@ -133,85 +179,69 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource,
       </article>
     );
   }
-  const handleVote = (dir: 1 | -1) => {
-    const votes = JSON.parse(localStorage.getItem("ic:votes") ?? "{}") as Record<string, number>;
-    const prev = votes[item.link] ?? 0;
-    const next = prev === dir ? 0 : dir;
-    votes[item.link] = next;
-    localStorage.setItem("ic:votes", JSON.stringify(votes));
-    window.dispatchEvent(new Event("ic:votes-updated"));
 
-    // Optimistic: undo old vote, apply new vote
-    if (prev === 1) setUpCount((c) => c - 1);
-    if (prev === -1) setDownCount((c) => c - 1);
-    if (next === 1) setUpCount((c) => c + 1);
-    if (next === -1) setDownCount((c) => c + 1);
-
-    fetch("/api/votes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ link: item.link, prev, next }),
-    }).catch(() => {});
-  };
-
-  const handleHide = () => {
-    const hidden = JSON.parse(localStorage.getItem("ic:hidden") ?? "[]") as string[];
-    if (!hidden.includes(item.link)) hidden.push(item.link);
-    localStorage.setItem("ic:hidden", JSON.stringify(hidden));
-    window.dispatchEvent(new Event("ic:hidden-updated"));
-    setConfirming(null);
-  };
-
-  const handleRemoveSource = () => {
-    onRemoveSource(item.sourceTitle);
-    setConfirming(null);
-  };
-
-  const curatorElements = item.curatorNames.length > 0
-    ? item.curatorNames.map((name, i) => ({ name, id: item.curatorIds[i] }))
-    : null;
-
-  const hasImage = !compact && !!item.image;
-
+  // Full variant — editorial layout
   return (
-    <article ref={cardRef} className={`rounded-xl overflow-hidden relative ${hasImage ? "h-80" : "bg-zinc-900 px-4 py-5"}`}>
-      {read && (
-        <div className="absolute top-3 right-3 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800/80">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
-        </div>
-      )}
+    <article ref={cardRef} className="pb-4 border-b border-zinc-800 last:border-b-0 relative">
+      {/* Image — full width, no overlay, sharp edges */}
       {hasImage && (
-        <>
-          <img
-            src={item.image!}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            loading="lazy"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/30" />
-        </>
+        <img
+          src={item.image!}
+          alt=""
+          className="w-full max-h-64 object-cover"
+          loading="lazy"
+        />
       )}
 
-      <div className={`relative flex flex-col ${hasImage ? "h-full justify-between p-4" : ""}`}>
-        {/* Source badge — top */}
+      {/* Text content block */}
+      <div className={hasImage ? "mt-3" : ""}>
+        {/* Source badge */}
         <div>
           {item.sourceId ? (
             <Link
               href={`/source/${item.sourceId}`}
               onClick={(e) => e.stopPropagation()}
-              className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium hover:underline ${hasImage ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-400"}`}
+              className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium bg-zinc-800 text-zinc-400 hover:underline"
             >
               {item.sourceTitle}
             </Link>
           ) : (
-            <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${hasImage ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-400"}`}>
+            <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium bg-zinc-800 text-zinc-400">
               {item.sourceTitle}
             </span>
           )}
         </div>
 
-        {/* Title + snippet — middle */}
-        <div className={hasImage ? "mt-auto" : "mt-3"}>
+        {/* Tags */}
+        {item.tags && item.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {item.tags
+              .filter((t) => t.facet === "topic" || t.facet === "voice")
+              .slice(0, 4)
+              .map((tag) => (
+                <Link
+                  key={tag.id}
+                  href={`/feed?tags=${tag.slug}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] transition-colors ${
+                    tag.facet === "voice"
+                      ? "text-zinc-600 border border-zinc-800 hover:text-zinc-400"
+                      : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300"
+                  }`}
+                >
+                  {tag.name}
+                </Link>
+              ))}
+          </div>
+        )}
+
+        {/* Title + read indicator */}
+        <div className="flex items-start gap-1.5 mt-2">
+          {read && (
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2.5" className="mt-[3px] shrink-0">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+          )}
           <button
             onClick={() => {
               markRead();
@@ -229,85 +259,87 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource,
             }}
             className="block text-left w-full"
           >
-            <h2 className={`font-semibold leading-snug ${hasImage ? "text-white text-lg" : "text-zinc-100"}`}>
+            <h2 className="font-semibold leading-snug text-zinc-100">
               {item.title}
             </h2>
           </button>
-          {item.contentSnippet && (
-            <p className={`mt-1.5 text-sm line-clamp-2 ${hasImage ? "text-white/70" : "text-zinc-500"}`}>
-              {item.contentSnippet}
-            </p>
-          )}
         </div>
 
-        {/* Curator + actions — bottom */}
-        <div className={`flex items-center justify-between ${hasImage ? "" : "mt-3"}`}>
-          <p className={`text-xs ${hasImage ? "text-white/50" : "text-zinc-600"}`}>
-            {curatorElements ? (
-              <>
-                via{" "}
-                {curatorElements.map((c, i) => (
-                  <span key={c.id}>
-                    <Link
-                      href={`/curator/${c.id}`}
-                      className={`underline-offset-2 hover:underline ${hasImage ? "text-white/70" : "text-zinc-400"}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {c.name}
-                    </Link>
-                    {i < curatorElements.length - 1 && ", "}
-                  </span>
-                ))}
-              </>
-            ) : (
-              "Trending"
-            )}{" "}
-            · {new Date(item.pubDate).toLocaleDateString()}
+        {/* Snippet */}
+        {item.contentSnippet && (
+          <p className="mt-1.5 text-sm text-zinc-500 line-clamp-2">
+            {item.contentSnippet}
           </p>
-        {/* Actions strip */}
-        <div className={`flex items-center justify-around border-t border-zinc-800 pt-3 ${hasImage ? "relative z-10" : ""}`}>
-          {showAddSource && (
-            <button
-              onClick={handleAddSource}
-              disabled={adding || added}
-              className={`flex items-center gap-1 py-1 px-3 rounded-lg transition-colors active:scale-95 ${
-                added ? "text-green-400" : "text-zinc-400 hover:bg-zinc-800/50"
-              }`}
-            >
-              {added ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
-              )}
-              <span className="text-xs font-medium">{added ? "Added" : "Save"}</span>
-            </button>
-          )}
-          <button onClick={() => handleVote(1)} className={`flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 ${vote === 1 ? "text-green-400" : "text-zinc-400"}`}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill={vote === 1 ? "#4ade80" : "none"} stroke="currentColor" strokeWidth="2"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>
-            <span className="text-xs font-medium">{upCount}</span>
-          </button>
-          <button onClick={() => handleVote(-1)} className={`flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 ${vote === -1 ? "text-red-400" : "text-zinc-400"}`}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill={vote === -1 ? "#f87171" : "none"} stroke="currentColor" strokeWidth="2"><path d="M12 20l8-8h-5V4H9v8H4z"/></svg>
-            <span className="text-xs font-medium">{downCount}</span>
-          </button>
-          <button onClick={() => navigator.clipboard.writeText(item.link)} className="flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 text-zinc-400">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
-          </button>
-          <div ref={menuRef} className="relative">
-            <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 text-zinc-400">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-            </button>
-            {menuOpen && (
-              <div className="absolute bottom-full right-0 mb-2 w-36 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-50">
-                <button onClick={() => { setConfirming("hide"); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-sm text-zinc-300 hover:bg-zinc-700 rounded-t-lg transition-colors">Hide</button>
-                <button onClick={() => { setConfirming("remove"); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-zinc-700 rounded-b-lg transition-colors">Remove source</button>
-              </div>
+        )}
+
+        {/* Curator line + date */}
+        <p className="mt-2 text-xs text-zinc-600">
+          {curatorElements ? (
+            <>
+              via{" "}
+              {curatorElements.map((c, i) => (
+                <span key={c.id}>
+                  <Link
+                    href={`/curator/${c.id}`}
+                    className="underline-offset-2 hover:underline text-zinc-400"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {c.name}
+                  </Link>
+                  {i < curatorElements.length - 1 && ", "}
+                </span>
+              ))}
+            </>
+          ) : (
+            "Trending"
+          )}{" "}
+          · {new Date(item.pubDate).toLocaleDateString()}
+        </p>
+      </div>
+
+      {/* Actions row — below text, subtle */}
+      <div className="flex items-center justify-around mt-3 pt-2 border-t border-zinc-800/60">
+        {showAddSource && (
+          <button
+            onClick={handleAddSource}
+            disabled={adding || added}
+            className={`flex items-center gap-1 py-1 px-3 rounded-lg transition-colors active:scale-95 ${
+              added ? "text-green-400" : "text-zinc-400 hover:bg-zinc-800/50"
+            }`}
+          >
+            {added ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
             )}
-          </div>
-        </div>
+            <span className="text-xs font-medium">{added ? "Added" : "Save"}</span>
+          </button>
+        )}
+        <button onClick={() => handleVote(1)} className={`flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 ${vote === 1 ? "text-green-400" : "text-zinc-400"}`}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill={vote === 1 ? "#4ade80" : "none"} stroke="currentColor" strokeWidth="2"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>
+          <span className="text-xs font-medium">{upCount}</span>
+        </button>
+        <button onClick={() => handleVote(-1)} className={`flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 ${vote === -1 ? "text-red-400" : "text-zinc-400"}`}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill={vote === -1 ? "#f87171" : "none"} stroke="currentColor" strokeWidth="2"><path d="M12 20l8-8h-5V4H9v8H4z"/></svg>
+          <span className="text-xs font-medium">{downCount}</span>
+        </button>
+        <button onClick={() => navigator.clipboard.writeText(item.link)} className="flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 text-zinc-400">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+        </button>
+        <div ref={menuRef} className="relative">
+          <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 text-zinc-400">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+          </button>
+          {menuOpen && (
+            <div className="absolute bottom-full right-0 mb-2 w-36 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-50">
+              <button onClick={() => { setConfirming("hide"); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-sm text-zinc-300 hover:bg-zinc-700 rounded-t-lg transition-colors">Hide</button>
+              <button onClick={() => { setConfirming("remove"); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-zinc-700 rounded-b-lg transition-colors">Remove source</button>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Confirmation overlay */}
       {confirming && (
         <div className="absolute inset-x-0 bottom-0 z-10 border-t border-zinc-700 bg-zinc-900 p-3">
           <p className="text-xs text-zinc-300 mb-2">

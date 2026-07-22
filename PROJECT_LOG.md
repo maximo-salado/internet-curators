@@ -110,3 +110,37 @@ Issues: #49–#57
 
 ### Deferred
 - Mastodon/Lemmy, GitHub, Reddit/HN, blogroll crawling, filter learning, blocklist as public resource
+
+## 2026-07-21 — Taxonomy Foundation (Hermes + OpenCode + Claude)
+
+PR: #79 merged to main
+Plan: `.hermes/plans/2026-07-21_taxonomy-foundation.md` (Claude-reviewed, 2 rounds)
+Issues: #67–#78
+
+### Built
+- Migration 014: unified `tags` table (69 tags) with `facet` column (topic/voice/stance/format/language), `parent_id` for topic tree, keyword arrays for auto-tagging
+- `source_tags` + `article_tags` junction tables with RLS policies
+- Inherited tags resolve at query time (JOIN through source_tags); keyword-matched tags materialized at article insert
+- `/api/tags` — public, grouped by facet
+- `/api/sources/[id]/tags` — editor GET/PUT with bounds checking
+- `/api/feed?tags=` — AND filtering with parent-to-child expansion
+- `feed-refresher.ts` — keyword matching against article title+snippet for topic + voice facets
+- SourceReviewCard tag assignment UI (topic grouped by parent, stance/format flat)
+- PATCH approve endpoint accepts `tag_ids` for persistence on source creation
+- ArticleCard tag chips (topic solid bg, voice border style, links to filtered feed)
+- `/api/admin/article-tags` — editor keyword observability endpoint
+- Reset all approved sources to pending so all go through new taxonomy flow
+
+### Design decisions
+- Faceted tags: Topic (tree, 2 levels) + Voice (article-level, keyword-matched) + Stance/Format/Language (source-level, editor-assigned)
+- Voice is article-level because it describes writing style, not source identity
+- "Academic" renamed "Scholarly" in Voice to avoid collision with Stance:Academic
+- Climate & Energy moved from Science & Tech to Politics & Society (progressive editorial worldview)
+- Social Science moved to History & Ideas
+- Internet Culture under Arts & Culture (reader-facing nav, not political classification)
+- Tags-at-query-time architecture: editorial corrections propagate to all articles immediately
+
+### Agent attribution
+- orchestration: hermes (deepseek-v4-pro) — research, plan draft, coordination
+- review: claude (sonnet) — 2 rounds: conceptual/ethos + implementation/edge cases
+- code: opencode (deepseek-v4-pro) — all TypeScript + SQL implementation
