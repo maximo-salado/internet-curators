@@ -18,6 +18,22 @@ interface DiscoveredSource {
     self_hosted?: boolean;
     custom_domain?: boolean;
     has_trackers?: boolean;
+    // Trust signals — verified membership (emerald green)
+    content_credentials?: boolean;
+    trust_project?: boolean;
+    jti_certified?: boolean;
+    ifcn_signatory?: boolean;
+    // Trust signals — values alignment (amber)
+    creative_commons?: string;
+    not_by_ai?: boolean;
+    indieweb?: boolean;
+    // Research aid (link, not badge)
+    editorial_standards_url?: string;
+    // Metadata
+    _enrichment_failed?: boolean;
+    _enrichment_attempted?: boolean;
+    // Manual override tracking
+    _manual_overrides?: Record<string, boolean>;
   };
   status: string;
   discovered_at: string;
@@ -64,6 +80,7 @@ export default function ReviewQueuePage() {
           setIsEditor(true);
           setSources(data.items ?? []);
           setFilterTagSlugs([]); // reset filters on tab switch
+          enrichSources(data.items ?? []);
         } else {
           setIsEditor(false);
         }
@@ -87,6 +104,45 @@ export default function ReviewQueuePage() {
       );
     });
   }, [sources, filterTagSlugs, slugToName]);
+
+  const enrichSources = async (items: DiscoveredSource[]) => {
+    const pending = items.filter((source) => {
+      const sig = (source.independence_signals ?? {}) as Record<string, unknown>;
+      return !sig._enrichment_attempted;
+    });
+    if (pending.length === 0) return;
+
+    const results = await Promise.allSettled(
+      pending.map((source) =>
+        fetch("/api/discover/sources/enrich", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source_id: source.id }),
+        }).then((r) => r.json())
+      )
+    );
+
+    results.forEach((result, i) => {
+      if (result.status !== "fulfilled") return;
+      const data = result.value;
+      if (data.enriched && data.signals) {
+        setSources((prev) =>
+          prev.map((s) =>
+            s.id === pending[i].id
+              ? {
+                  ...s,
+                  independence_signals: {
+                    ...s.independence_signals,
+                    ...data.signals,
+                    _enrichment_attempted: true,
+                  },
+                }
+              : s
+          )
+        );
+      }
+    });
+  };
 
   if (loading) {
     return (
