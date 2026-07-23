@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     if (curator?.role === "editor") isEditor = true;
   }
 
-  // Always query discovered_sources — rejected_sources is only for dedup/blacklist
+  // Fetch discovered sources
   const { data, error, count } = await supabase
     .from("discovered_sources")
     .select("*", { count: "exact" })
@@ -30,8 +30,33 @@ export async function GET(req: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const sources = data ?? [];
+
+  // Fetch tags for all returned sources
+  if (sources.length > 0) {
+    const sourceIds = sources.map((s) => s.id);
+    const { data: tagRows } = await supabase
+      .from("discovered_source_tags")
+      .select("source_id, tag_id, tags!inner(slug, name, facet)")
+      .in("source_id", sourceIds);
+
+    // Merge tags into each source
+    const tagsBySource = new Map<string, Array<{ slug: string; name: string; facet: string }>>();
+    for (const row of (tagRows ?? [])) {
+      const tag = (row as any).tags;
+      if (!tag) continue;
+      const list = tagsBySource.get(row.source_id) ?? [];
+      list.push({ slug: tag.slug, name: tag.name, facet: tag.facet });
+      tagsBySource.set(row.source_id, list);
+    }
+
+    for (const source of sources) {
+      (source as any).tags = tagsBySource.get(source.id) ?? [];
+    }
+  }
+
   return NextResponse.json({
-    items: data ?? [],
+    items: sources,
     total: count ?? 0,
     hasMore: (count ?? 0) > offset + limit,
     isEditor,

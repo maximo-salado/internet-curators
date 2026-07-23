@@ -1,5 +1,47 @@
 # Internet Curators — Project Log
 
+## 2026-07-23 — Trust Signals + Tag System Refactor + Review UX
+
+Agent stack: Hermes (orchestration), OpenCode Go (code), Claude Sonnet (review)
+PRs: #TBD
+Issues: #99-#109
+
+### What was built
+
+**Backend: Trust signal detection**
+- `src/lib/trust-signals.ts` — fetches homepage HTML, detects 7 trust badges via regex (C2PA, Trust Project, JTI, IFCN, CC, Not by AI, IndieWeb)
+- SSRF-safe with private IP blocking, 8s timeout, 2MB body cap
+- Detects platform (12 values) and no-trackers status
+- Returns tag slugs for unified taxonomy
+
+**Backend: Tag system refactor**
+- `discovered_source_tags` junction table (016 migration)
+- New tag facets: `trust`, `infra`, `platform`
+- ~30 seed tags (017 migration + backfill)
+- Enrich endpoint writes to `discovered_source_tags` instead of jsonb
+- `update_tags` PATCH action with split-brain fix (writes to source_tags if approved)
+- `_manual_overrides` jsonb removed — `edited_by` is the audit trail
+
+**Frontend: Review UX redesign**
+- `/review/[id]` — editor detail page with 8 collapsible sections (Topic, Stance, Format, Trust, Infra, Platform, Language, Posts)
+- All sections use TagSelector — same UI, same data model
+- Save/Cancel persist all edits; terminal actions auto-save before executing
+- Review queue: clean list cards with tag pills, links to detail page
+- Window focus re-fetch after navigation back from detail
+
+### Design decisions
+- All tags are public-read — readers see trust/infra/platform tags on source profiles
+- `has-trackers` stays as jsonb boolean (detection fact, not a tag); only `no-trackers` is a tag
+- CC license variant flattened to "Creative Commons" tag (license name enough)
+- `editorial_standards_url` remains in jsonb (URL, not a tag)
+- Non-atomic delete-then-insert documented as acceptable for single-editor workflow
+
+### Claude reviews applied
+- Round 1: Two-tier badge system, sort not filter, override audit trail
+- Round 2: Sequential→parallel enrichment, client state sync, editor role check
+- Round 3: Approve dedup, error capture, has_trackers coercion
+- Round 4: Auth ordering, toast labels, aria, queue refresh on focus
+
 ## 2026-07-15 — Claude Code Security Audit
 
 Agent: Claude Sonnet (Max subscription)
