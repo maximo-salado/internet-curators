@@ -243,6 +243,15 @@ export default function ReviewQueuePage() {
               onTransition={(id) => {
                 setSources((prev) => prev.filter((s) => s.id !== id));
               }}
+              onSignalsUpdated={(sourceId, signals) => {
+                setSources((prev) =>
+                  prev.map((s) =>
+                    s.id === sourceId
+                      ? { ...s, independence_signals: { ...s.independence_signals, ...signals } }
+                      : s
+                  )
+                );
+              }}
             />
           ))}
         </div>

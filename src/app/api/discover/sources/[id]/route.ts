@@ -9,7 +9,7 @@ export async function PATCH(
   const supabase = await createClient();
   const { id } = await params;
   const body = await req.json();
-  const action = body.action as "approve" | "reject" | "pending" | "parked";
+  const action = body.action as "approve" | "reject" | "pending" | "parked" | "update_trust_signals";
   const reason = (body.reason as string) ?? "";
   const tagIds = (body.tag_ids as string[]) ?? [];
 
@@ -203,6 +203,47 @@ export async function PATCH(
       .eq("id", id);
 
     return NextResponse.json({ success: true, action: "parked" });
+  }
+
+  // --- UPDATE_TRUST_SIGNALS → manual override with audit trail ---
+  if (action === "update_trust_signals") {
+    const trustOverrides = (body.trust_overrides as Record<string, boolean>) ?? {};
+    const overrideUrls = (body.override_urls as Record<string, string>) ?? {};
+    const existing = (source.independence_signals as Record<string, unknown>) ?? {};
+
+    const manualOverrides: Record<string, boolean> = {
+      ...((existing._manual_overrides as Record<string, boolean>) ?? {}),
+    };
+    const overrideEvidence: Record<string, string> = {
+      ...((existing._override_evidence as Record<string, string>) ?? {}),
+    };
+
+    for (const [key, value] of Object.entries(trustOverrides)) {
+      if (value !== (existing as any)[key]) {
+        manualOverrides[key] = true;
+      }
+      if (overrideUrls[key]) {
+        overrideEvidence[key] = overrideUrls[key];
+      }
+    }
+
+    const merged = {
+      ...existing,
+      ...trustOverrides,
+      _manual_overrides: manualOverrides,
+      _override_evidence: overrideEvidence,
+    };
+
+    const { error: updateErr } = await supabase
+      .from("discovered_sources")
+      .update({ independence_signals: merged })
+      .eq("id", id);
+
+    if (updateErr) {
+      return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, signals: merged });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
