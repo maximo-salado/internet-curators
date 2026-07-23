@@ -68,6 +68,7 @@ const platformColors: Record<string, string> = {
 };
 
 function normalizeCCLicense(raw: string): string {
+  if (raw === "licensed") return "CC licensed";
   const [type, version] = raw.split("/");
   const formatted = type.split("-").map((p) => p.toUpperCase()).join("-");
   return version ? `CC ${formatted} ${version}` : `CC ${formatted}`;
@@ -83,6 +84,7 @@ export function SourceReviewCard({ source, isEditor, onTransition, onSignalsUpda
   const [editingTrust, setEditingTrust] = useState(false);
   const [trustOverrides, setTrustOverrides] = useState<Record<string, boolean>>({});
   const [overrideUrls, setOverrideUrls] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const isManual = (key: string) => {
     const overrides = (sig as any)?._manual_overrides ?? {};
@@ -237,16 +239,25 @@ export function SourceReviewCard({ source, isEditor, onTransition, onSignalsUpda
         )}
 
         {/* Research aid */}
-        {sig?.editorial_standards_url && (
-          <a
-            href={sig.editorial_standards_url.startsWith("http") ? sig.editorial_standards_url : new URL(sig.editorial_standards_url, source.site_url).href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[10px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2 ml-1"
-          >
-            → standards
-          </a>
-        )}
+        {sig?.editorial_standards_url && (() => {
+          const rawUrl = sig.editorial_standards_url;
+          const resolved = rawUrl.startsWith("http")
+            ? rawUrl
+            : (rawUrl.startsWith("/") || rawUrl.startsWith("."))
+              ? (() => { try { return new URL(rawUrl, source.site_url).href; } catch { return null; } })()
+              : null;
+          if (!resolved || !/^https?:\/\//.test(resolved)) return null;
+          return (
+            <a
+              href={resolved}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2 ml-1"
+            >
+              → standards
+            </a>
+          );
+        })()}
 
         {/* Enrichment failure */}
         {sig?._enrichment_failed && (
@@ -338,9 +349,16 @@ export function SourceReviewCard({ source, isEditor, onTransition, onSignalsUpda
                   const data = await res.json();
                   if (data.success && data.signals) {
                     onSignalsUpdated?.(source.id, data.signals);
+                    setTrustOverrides({});
+                    setOverrideUrls({});
+                    setSaveError(null);
+                    setEditingTrust(false);
+                  } else {
+                    setSaveError(data.error || "Save failed");
                   }
-                } catch {}
-                setEditingTrust(false);
+                } catch {
+                  setSaveError("Network error — try again");
+                }
               }}
               className="rounded bg-emerald-800 px-2 py-1 text-[11px] text-emerald-300 hover:bg-emerald-700"
             >
@@ -351,12 +369,16 @@ export function SourceReviewCard({ source, isEditor, onTransition, onSignalsUpda
                 setEditingTrust(false);
                 setTrustOverrides({});
                 setOverrideUrls({});
+                setSaveError(null);
               }}
               className="rounded bg-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:bg-zinc-600"
             >
               Cancel
             </button>
           </div>
+          {saveError && (
+            <p className="mt-2 text-[10px] text-red-400">{saveError}</p>
+          )}
         </div>
       )}
 

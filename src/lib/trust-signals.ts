@@ -63,7 +63,7 @@ const DETECTION_RULES: DetectionRule[] = [
     ],
     extractor: (match: RegExpMatchArray) => {
       if (match[2]) return match[2].replace(/\/$/, "");
-      return "licensed"; // licensebuttons.net matched without capture group — return descriptive string, not boolean
+      return "licensed"; // licensebuttons.net matched without capture group
     },
   },
   {
@@ -101,6 +101,32 @@ const DETECTION_RULES: DetectionRule[] = [
   },
 ];
 
+const PRIVATE_IP_PATTERNS = [
+  /^https?:\/\/localhost/i,
+  /^https?:\/\/127\./,
+  /^https?:\/\/10\./,
+  /^https?:\/\/172\.(1[6-9]|2\d|3[01])\./,
+  /^https?:\/\/192\.168\./,
+  /^https?:\/\/169\.254\./,
+  /^https?:\/\/\[::1\]/,
+  /^https?:\/\/0\.0\.0\.0/,
+];
+
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    for (const pattern of PRIVATE_IP_PATTERNS) {
+      if (pattern.test(url)) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const MAX_BODY_BYTES = 2 * 1024 * 1024; // 2 MB
+
 /**
  * Fetch homepage HTML and detect trust signals.
  * Returns {_enrichment_failed: true} on failure (network error, timeout, etc.)
@@ -108,6 +134,7 @@ const DETECTION_RULES: DetectionRule[] = [
  */
 export async function detectTrustSignals(siteUrl: string): Promise<TrustSignals> {
   if (!siteUrl) return { _enrichment_failed: true };
+  if (!isSafeUrl(siteUrl)) return { _enrichment_failed: true };
 
   try {
     const controller = new AbortController();
@@ -122,11 +149,18 @@ export async function detectTrustSignals(siteUrl: string): Promise<TrustSignals>
       redirect: "follow",
     });
 
+    if (!response.ok) {
+      clearTimeout(timer);
+      return { _enrichment_failed: true };
+    }
+
+    // Read body with size cap (abort timer covers this)
+    const text = await response.text();
     clearTimeout(timer);
 
-    if (!response.ok) return { _enrichment_failed: true };
+    if (text.length > MAX_BODY_BYTES) return { _enrichment_failed: true };
 
-    const html = await response.text();
+    const html = text;
     const signals: TrustSignals = {};
 
     for (const rule of DETECTION_RULES) {

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { refreshStaleSources } from "@/lib/feed-refresher";
+import { ALL_TRUST_KEYS } from "@/lib/trust-signals";
 import { NextResponse } from "next/server";
 
 export async function PATCH(
@@ -211,6 +212,14 @@ export async function PATCH(
     const overrideUrls = (body.override_urls as Record<string, string>) ?? {};
     const existing = (source.independence_signals as Record<string, unknown>) ?? {};
 
+    // Whitelist: only allow known trust signal keys
+    const safeOverrides: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(trustOverrides)) {
+      if ((ALL_TRUST_KEYS as readonly string[]).includes(key)) {
+        safeOverrides[key] = value;
+      }
+    }
+
     const manualOverrides: Record<string, boolean> = {
       ...((existing._manual_overrides as Record<string, boolean>) ?? {}),
     };
@@ -218,9 +227,11 @@ export async function PATCH(
       ...((existing._override_evidence as Record<string, string>) ?? {}),
     };
 
-    for (const [key, value] of Object.entries(trustOverrides)) {
+    for (const [key, value] of Object.entries(safeOverrides)) {
       if (value !== (existing as any)[key]) {
-        manualOverrides[key] = true;
+        manualOverrides[key] = true; // editor changed it — mark manual
+      } else {
+        delete manualOverrides[key]; // reverted to auto-detected value — clear manual flag
       }
       if (overrideUrls[key]) {
         overrideEvidence[key] = overrideUrls[key];
@@ -229,7 +240,7 @@ export async function PATCH(
 
     const merged = {
       ...existing,
-      ...trustOverrides,
+      ...safeOverrides,
       _manual_overrides: manualOverrides,
       _override_evidence: overrideEvidence,
     };

@@ -89,15 +89,10 @@ export default function ReviewQueuePage() {
       .finally(() => setLoading(false));
   }, [activeStatus]);
 
-  const trustKeys = [
-    "content_credentials",
-    "trust_project",
-    "jti_certified",
-    "ifcn_signatory",
-    "creative_commons",
-    "not_by_ai",
-    "indieweb",
-  ];
+const TRUST_KEYS = [
+  "content_credentials", "trust_project", "jti_certified", "ifcn_signatory",
+  "creative_commons", "not_by_ai", "indieweb",
+];
 
   // Client-side filter: match source.suggested_tags against active filter slugs,
   // then sort badge-holders to the top.
@@ -121,10 +116,10 @@ export default function ReviewQueuePage() {
     return [...result].sort((a, b) => {
       const sigA = a.independence_signals ?? {};
       const sigB = b.independence_signals ?? {};
-      const aHasSignal = trustKeys.some((k) =>
+      const aHasSignal = TRUST_KEYS.some((k) =>
         sigA[k as keyof typeof sigA] != null && sigA[k as keyof typeof sigA] !== false
       );
-      const bHasSignal = trustKeys.some((k) =>
+      const bHasSignal = TRUST_KEYS.some((k) =>
         sigB[k as keyof typeof sigB] != null && sigB[k as keyof typeof sigB] !== false
       );
       if (aHasSignal && !bHasSignal) return -1;
@@ -140,36 +135,40 @@ export default function ReviewQueuePage() {
     });
     if (pending.length === 0) return;
 
-    const results = await Promise.allSettled(
-      pending.map((source) =>
-        fetch("/api/discover/sources/enrich", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source_id: source.id }),
-        }).then((r) => r.json())
-      )
-    );
+    const BATCH = 5;
+    for (let i = 0; i < pending.length; i += BATCH) {
+      const batch = pending.slice(i, i + BATCH);
+      const results = await Promise.allSettled(
+        batch.map((source) =>
+          fetch("/api/discover/sources/enrich", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source_id: source.id }),
+          }).then((r) => r.json())
+        )
+      );
 
-    results.forEach((result, i) => {
-      if (result.status !== "fulfilled") return;
-      const data = result.value;
-      if (data.enriched && data.signals) {
-        setSources((prev) =>
-          prev.map((s) =>
-            s.id === pending[i].id
-              ? {
-                  ...s,
-                  independence_signals: {
-                    ...s.independence_signals,
-                    ...data.signals,
-                    _enrichment_attempted: true,
-                  },
-                }
-              : s
-          )
-        );
-      }
-    });
+      results.forEach((result, j) => {
+        if (result.status !== "fulfilled") return;
+        const data = result.value;
+        if (data.enriched && data.signals) {
+          setSources((prev) =>
+            prev.map((s) =>
+              s.id === batch[j].id
+                ? {
+                    ...s,
+                    independence_signals: {
+                      ...s.independence_signals,
+                      ...data.signals,
+                      _enrichment_attempted: true,
+                    },
+                  }
+                : s
+            )
+          );
+        }
+      });
+    }
   };
 
   if (loading) {
