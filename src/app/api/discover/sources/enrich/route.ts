@@ -49,7 +49,7 @@ export async function POST(req: Request) {
   const result = await detectTrustSignals(
     source.site_url,
     source.platform ?? undefined,
-    (source.independence_signals as Record<string, unknown>)?.has_trackers as boolean | undefined,
+    (source.independence_signals as Record<string, unknown>)?.has_trackers === false ? false : undefined,
   );
 
   // Resolve slugs to tag IDs and insert into discovered_source_tags
@@ -61,11 +61,13 @@ export async function POST(req: Request) {
 
     if (!tagErr && tagRows) {
       const tagIds = tagRows.map((t: { id: string }) => t.id);
-      // Upsert: ignore duplicates on (source_id, tag_id) conflict
-      await supabase.from("discovered_source_tags").upsert(
+      const { error: upsertErr } = await supabase.from("discovered_source_tags").upsert(
         tagIds.map((tag_id: string) => ({ source_id: sourceId, tag_id })),
         { onConflict: "source_id,tag_id", ignoreDuplicates: true },
       );
+      if (upsertErr) {
+        console.error("Failed to upsert discovered_source_tags", upsertErr);
+      }
     }
   }
 

@@ -119,24 +119,29 @@ export async function PATCH(
         // Clear old tags from source_tags before re-inserting (handles re-approval)
         await supabase.from("source_tags").delete().eq("source_id", newSourceId);
 
-        // Copy editor-assigned tags (topic/stance/format from the UI)
-        if (tagIds.length > 0) {
-          const tagRows = tagIds.map((tag_id: string) => ({
-            source_id: newSourceId,
-            tag_id,
-          }));
-          await supabase.from("source_tags").insert(tagRows);
-        }
+        // Collect all tag IDs (editor-assigned + discovered), deduplicate, insert once
+        const allTagIds = new Set<string>(tagIds);
 
-        // Copy discovered tags (trust, infra, platform — auto-detected)
         const { data: dst } = await supabase
           .from("discovered_source_tags")
           .select("tag_id")
           .eq("source_id", id);
         if (dst?.length) {
-          await supabase.from("source_tags").insert(
-            dst.map((r: { tag_id: string }) => ({ source_id: newSourceId, tag_id: r.tag_id }))
-          );
+          for (const r of dst) allTagIds.add(r.tag_id);
+        }
+
+        if (allTagIds.size > 0) {
+          const tagRows = [...allTagIds].map((tag_id) => ({
+            source_id: newSourceId,
+            tag_id,
+          }));
+          const { error: tagInsertErr } = await supabase.from("source_tags").upsert(tagRows, {
+            onConflict: "source_id,tag_id",
+            ignoreDuplicates: true,
+          });
+          if (tagInsertErr) {
+            console.error("Failed to copy tags on approve", tagInsertErr);
+          }
         }
 
         await refreshStaleSources([{
@@ -244,15 +249,23 @@ export async function PATCH(
     }
 
     // Always update discovered_source_tags (delete-then-insert)
-    await supabase.from("discovered_source_tags").delete().eq("source_id", id);
+    const { error: delErr } = await supabase.from("discovered_source_tags").delete().eq("source_id", id);
+    if (delErr) {
+      console.error("Failed to delete discovered_source_tags", delErr);
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
     if (newTagIds.length > 0) {
-      await supabase.from("discovered_source_tags").insert(
+      const { error: insErr } = await supabase.from("discovered_source_tags").insert(
         newTagIds.map((tid: string) => ({
           source_id: id,
           tag_id: tid,
           edited_by: curator.id,
         }))
       );
+      if (insErr) {
+        console.error("Failed to insert discovered_source_tags", insErr);
+        return NextResponse.json({ error: insErr.message }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ success: true, tag_ids: newTagIds });
