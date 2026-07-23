@@ -25,6 +25,9 @@ interface DiscoveredSource {
     self_hosted?: boolean;
     custom_domain?: boolean;
     has_trackers?: boolean;
+    // Metadata
+    _enrichment_failed?: boolean;
+    _enrichment_attempted?: boolean;
   };
   status: string;
   discovered_at: string;
@@ -49,6 +52,13 @@ const platformColors: Record<string, string> = {
   medium: "bg-zinc-800 text-zinc-400",
   blogger: "bg-yellow-900/50 text-yellow-300",
 };
+
+function normalizeCCLicense(raw: string): string {
+  if (raw === "licensed") return "CC licensed";
+  const [type, version] = raw.split("/");
+  const formatted = type.split("-").map((p) => p.toUpperCase()).join("-");
+  return version ? `CC ${formatted} ${version}` : `CC ${formatted}`;
+}
 
 export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
   const [loading, setLoading] = useState(false);
