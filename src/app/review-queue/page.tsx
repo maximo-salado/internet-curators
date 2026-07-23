@@ -76,6 +76,20 @@ export default function ReviewQueuePage() {
       .finally(() => setLoading(false));
   }, [activeStatus]);
 
+  // Re-fetch on window focus (editor returns from detail page after action)
+  useEffect(() => {
+    const onFocus = () => {
+      fetch(`/api/discover/sources?status=${activeStatus}&limit=50`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.items) setSources(data.items ?? []);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [activeStatus]);
+
   // Client-side filter: match source.suggested_tags against active filter slugs
   const filteredSources = useMemo(() => {
     let result = sources;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { ReviewSection } from "./ReviewSection";
 import { TagSelector } from "./TagSelector";
@@ -31,6 +31,13 @@ interface DiscoveredSource {
 
 const TAG_FACETS = ["topic", "stance", "format", "trust", "infra", "platform", "language"] as const;
 
+const ACTION_LABELS: Record<string, string> = {
+  approve: "Approved",
+  reject: "Rejected",
+  pending: "Reverted to Pending",
+  parked: "Parked",
+};
+
 export function ReviewDetailClient({
   source: initialSource,
   allTags,
@@ -46,6 +53,13 @@ export function ReviewDetailClient({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [initialLoading, setInitialLoading] = useState(true);
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     fetch(`/api/discover/sources/${source.id}/tags`)
@@ -88,7 +102,8 @@ export function ReviewDetailClient({
 
   const showFeedback = (msg: string) => {
     setFeedback(msg);
-    setTimeout(() => setFeedback(null), 2500);
+    if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+    feedbackTimer.current = setTimeout(() => setFeedback(null), 2500);
   };
 
   const handleSave = async () => {
@@ -149,7 +164,7 @@ export function ReviewDetailClient({
       if (!res.ok) throw new Error("Action failed");
       const data = await res.json();
       setSource((prev) => ({ ...prev, status: data.action }));
-      showFeedback(`${action.charAt(0).toUpperCase() + action.slice(1)}d`);
+      showFeedback(ACTION_LABELS[action] || `${action}d`);
     } catch {
       showFeedback("Action failed");
     } finally {
