@@ -11,10 +11,14 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: tags } = await supabase
+  const { data: tags, error } = await supabase
     .from("discovered_source_tags")
     .select("tag_id")
     .eq("source_id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   const tag_ids = (tags ?? []).map((t: { tag_id: string }) => t.tag_id);
 

@@ -10,16 +10,9 @@ export default async function ReviewDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: source } = await supabase
-    .from("discovered_sources")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  if (!source) notFound();
-
+  // Auth check FIRST — prevents source existence info leak
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return <p>Access denied</p>;
+  if (!user) return <p className="mx-auto max-w-2xl px-6 py-12 text-zinc-400">Sign in required</p>;
 
   const { data: curator } = await supabase
     .from("curators")
@@ -27,7 +20,17 @@ export default async function ReviewDetailPage({
     .eq("user_id", user.id)
     .single();
 
-  if (curator?.role !== "editor") return <p>Access denied</p>;
+  if (curator?.role !== "editor") {
+    return <p className="mx-auto max-w-2xl px-6 py-12 text-zinc-400">Editor access required</p>;
+  }
+
+  const { data: source } = await supabase
+    .from("discovered_sources")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (!source) notFound();
 
   const { data: allTags } = await supabase
     .from("tags")

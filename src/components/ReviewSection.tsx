@@ -23,14 +23,15 @@ export function ReviewSection({
       <button
         type="button"
         onClick={onToggle}
+        aria-expanded={expanded}
         className="w-full flex items-center gap-2 py-3 text-left hover:bg-zinc-800/30 transition-colors px-1"
       >
         <span className="text-xs text-zinc-400 w-20 shrink-0">{label}</span>
         <span className="flex-1 flex items-center gap-1.5 min-w-0">
           {pills}
         </span>
-        <span className="text-[10px] text-zinc-600 ml-1">
-          {expanded ? "▾" : "▸"}
+        <span className="text-[10px] text-zinc-600 ml-1" aria-hidden="true">
+          {expanded ? "\u25BE" : "\u25B8"}
         </span>
       </button>
 
