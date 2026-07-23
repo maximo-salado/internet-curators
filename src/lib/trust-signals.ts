@@ -1,41 +1,63 @@
 // src/lib/trust-signals.ts
 
-export interface TrustSignals {
-  // Verified membership (emerald green)
-  content_credentials?: boolean;
-  trust_project?: boolean;
-  jti_certified?: boolean;
-  ifcn_signatory?: boolean;
+// Static mapping: detection pattern key → tag slug
+const SIGNAL_TO_SLUG: Record<string, string> = {
+  content_credentials: "content-credentials",
+  trust_project: "trust-project",
+  jti_certified: "jti-certified",
+  ifcn_signatory: "ifcn-signatory",
+  creative_commons: "creative-commons",
+  not_by_ai: "not-by-ai",
+  indieweb: "indieweb",
+  // editorial_standards_url: NOT mapped — it's a URL, kept in jsonb
+};
 
-  // Values alignment (amber)
-  creative_commons?: string; // license type string, e.g. "CC BY 4.0"
-  not_by_ai?: boolean;
-  indieweb?: boolean;
+// Platform string → tag slug
+const PLATFORM_TO_SLUG: Record<string, string> = {
+  wordpress: "wordpress",
+  ghost: "ghost",
+  substack: "substack",
+  bearblog: "bearblog",
+  mastodon: "mastodon",
+  lemmy: "lemmy",
+  microblog: "microblog",
+  neocities: "neocities",
+  tumblr: "tumblr",
+  medium: "medium",
+  blogger: "blogger",
+  custom: "custom",
+};
 
-  // Research aid (link, not badge)
-  editorial_standards_url?: string;
-
-  // Enrichment metadata (internal, not displayed as badges)
+export interface EnrichmentResult {
+  suggested_tag_slugs: string[];
+  editorial_standards_url?: string; // kept as raw data (not a tag)
   _enrichment_failed?: boolean;
 }
 
-/** Verified membership signal keys */
-export const VERIFIED_SIGNALS: (keyof TrustSignals)[] = [
-  "content_credentials", "trust_project", "jti_certified", "ifcn_signatory",
+/** Legacy: verified membership signal keys (for PATCH route compat — see Task 6) */
+export const VERIFIED_SIGNALS: readonly string[] = [
+  "content_credentials",
+  "trust_project",
+  "jti_certified",
+  "ifcn_signatory",
 ];
 
-/** Values alignment signal keys */
-export const VALUES_SIGNALS: (keyof TrustSignals)[] = [
-  "creative_commons", "not_by_ai", "indieweb",
+/** Legacy: values alignment signal keys (for PATCH route compat — see Task 6) */
+export const VALUES_SIGNALS: readonly string[] = [
+  "creative_commons",
+  "not_by_ai",
+  "indieweb",
 ];
 
-/** All trust signal keys (excluding metadata keys starting with _) */
-export const ALL_TRUST_KEYS: (keyof TrustSignals)[] = [
-  ...VERIFIED_SIGNALS, ...VALUES_SIGNALS, "editorial_standards_url",
+/** Legacy: all trust signal keys excluding metadata keys (for PATCH route compat — see Task 6) */
+export const ALL_TRUST_KEYS: readonly string[] = [
+  ...VERIFIED_SIGNALS,
+  ...VALUES_SIGNALS,
+  "editorial_standards_url",
 ];
 
 type DetectionRule = {
-  key: keyof TrustSignals;
+  key: string;
   patterns: RegExp[];
   extractor?: (match: RegExpMatchArray, html: string) => string | boolean;
 };
@@ -132,9 +154,16 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024; // 2 MB
  * Returns {_enrichment_failed: true} on failure (network error, timeout, etc.)
  * so the caller can distinguish "no signals found" from "couldn't check."
  */
-export async function detectTrustSignals(siteUrl: string): Promise<TrustSignals> {
-  if (!siteUrl) return { _enrichment_failed: true };
-  if (!isSafeUrl(siteUrl)) return { _enrichment_failed: true };
+export async function detectTrustSignals(
+  siteUrl: string,
+  platform?: string,
+  hasTrackers?: boolean,
+): Promise<EnrichmentResult> {
+  if (!siteUrl) return { suggested_tag_slugs: [], _enrichment_failed: true };
+  if (!isSafeUrl(siteUrl)) return { suggested_tag_slugs: [], _enrichment_failed: true };
+
+  const suggested_tag_slugs: string[] = [];
+  let editorial_standards_url: string | undefined;
 
   try {
     const controller = new AbortController();
@@ -151,38 +180,82 @@ export async function detectTrustSignals(siteUrl: string): Promise<TrustSignals>
 
     if (!response.ok) {
       clearTimeout(timer);
-      return { _enrichment_failed: true };
+      return { suggested_tag_slugs: [], _enrichment_failed: true };
     }
 
     // Read body with size cap (abort timer covers this)
     const text = await response.text();
     clearTimeout(timer);
 
-    if (text.length > MAX_BODY_BYTES) return { _enrichment_failed: true };
+    if (text.length > MAX_BODY_BYTES) return { suggested_tag_slugs: [], _enrichment_failed: true };
 
     const html = text;
-    const signals: TrustSignals = {};
 
     for (const rule of DETECTION_RULES) {
       for (const pattern of rule.patterns) {
         const match = html.match(pattern);
         if (match) {
-          if (rule.extractor) {
-            const extracted = rule.extractor(match, html);
-            if (extracted) {
-              (signals as Record<string, unknown>)[rule.key as string] = extracted;
+          if (rule.key === "editorial_standards_url") {
+            // This stays as raw data (a URL), not a tag
+            if (rule.extractor) {
+              const extracted = rule.extractor(match, html);
+              if (extracted && typeof extracted === "string") {
+                editorial_standards_url = extracted;
+              }
             }
           } else {
-            (signals as Record<string, unknown>)[rule.key as string] = true;
+            // Map detection match to tag slug
+            const slug = SIGNAL_TO_SLUG[rule.key];
+            if (slug) suggested_tag_slugs.push(slug);
           }
           break;
         }
       }
     }
 
-    return signals;
+    // Map platform to tag slug
+    if (platform) {
+      const platformSlug = PLATFORM_TO_SLUG[platform.toLowerCase()];
+      if (platformSlug) suggested_tag_slugs.push(platformSlug);
+    }
+
+    // Map no-trackers to tag slug
+    if (hasTrackers === false) {
+      suggested_tag_slugs.push("no-trackers");
+    }
+
+    return { suggested_tag_slugs, editorial_standards_url, _enrichment_failed: false };
   } catch {
-    return { _enrichment_failed: true };
+    return { suggested_tag_slugs: [], _enrichment_failed: true };
+  }
+}
+            }
+          } else {
+            const slug = SIGNAL_TO_SLUG[rule.key];
+            if (slug) suggested_tag_slugs.push(slug);
+          }
+          break;
+        }
+      }
+    }
+
+    // Map platform to tag slug
+    if (platform && PLATFORM_TO_SLUG[platform.toLowerCase()]) {
+      suggested_tag_slugs.push(PLATFORM_TO_SLUG[platform.toLowerCase()]);
+    }
+
+    // Map no-trackers to tag slug
+    if (hasTrackers === false) {
+      suggested_tag_slugs.push("no-trackers");
+    }
+
+    return {
+      suggested_tag_slugs,
+      ...(editorial_standards_url ? { editorial_standards_url } : {}),
+      _enrichment_failed: false,
+    };
+  } catch {
+    return { suggested_tag_slugs: [], _enrichment_failed: true };
   }
 }
 
@@ -190,10 +263,13 @@ export async function detectTrustSignals(siteUrl: string): Promise<TrustSignals>
  * Merge trust signals into existing independence_signals jsonb.
  * Preserves existing keys, overwrites trust signal keys.
  * Marks _enrichment_attempted to prevent re-enrichment (even on failure).
+ *
+ * @deprecated Use detectTrustSignals → EnrichmentResult.suggested_tag_slugs instead.
+ *   This function remains for backward compat with Task 3 transition.
  */
 export function mergeTrustSignals(
   existingSignals: Record<string, unknown> | null,
-  trustSignals: TrustSignals
+  trustSignals: Record<string, unknown>,
 ): Record<string, unknown> {
   return {
     ...(existingSignals ?? {}),
