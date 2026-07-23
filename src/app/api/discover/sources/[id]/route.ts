@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { refreshStaleSources } from "@/lib/feed-refresher";
-import { ALL_TRUST_KEYS } from "@/lib/trust-signals";
 import { NextResponse } from "next/server";
 
 export async function PATCH(
@@ -10,7 +9,7 @@ export async function PATCH(
   const supabase = await createClient();
   const { id } = await params;
   const body = await req.json();
-  const action = body.action as "approve" | "reject" | "pending" | "parked" | "update_trust_signals";
+  const action = body.action as "approve" | "reject" | "pending" | "parked" | "update_tags";
   const reason = (body.reason as string) ?? "";
   const tagIds = (body.tag_ids as string[]) ?? [];
 
@@ -115,18 +114,33 @@ export async function PATCH(
         .limit(1);
 
       if (sourceRows?.[0]) {
-        // Save editor-assigned tags (always clear old tags, then insert if any selected)
-        await supabase.from("source_tags").delete().eq("source_id", sourceRows[0].id);
+        const newSourceId = sourceRows[0].id;
+
+        // Clear old tags from source_tags before re-inserting (handles re-approval)
+        await supabase.from("source_tags").delete().eq("source_id", newSourceId);
+
+        // Copy editor-assigned tags (topic/stance/format from the UI)
         if (tagIds.length > 0) {
           const tagRows = tagIds.map((tag_id: string) => ({
-            source_id: sourceRows[0].id,
+            source_id: newSourceId,
             tag_id,
           }));
           await supabase.from("source_tags").insert(tagRows);
         }
 
+        // Copy discovered tags (trust, infra, platform — auto-detected)
+        const { data: dst } = await supabase
+          .from("discovered_source_tags")
+          .select("tag_id")
+          .eq("source_id", id);
+        if (dst?.length) {
+          await supabase.from("source_tags").insert(
+            dst.map((r: { tag_id: string }) => ({ source_id: newSourceId, tag_id: r.tag_id }))
+          );
+        }
+
         await refreshStaleSources([{
-          id: sourceRows[0].id,
+          id: newSourceId,
           feed_url: sourceRows[0].feed_url,
           last_fetched_at: null,
         }]);
@@ -206,55 +220,42 @@ export async function PATCH(
     return NextResponse.json({ success: true, action: "parked" });
   }
 
-  // --- UPDATE_TRUST_SIGNALS → manual override with audit trail ---
-  if (action === "update_trust_signals") {
-    const trustOverrides = (body.trust_overrides as Record<string, boolean>) ?? {};
-    const overrideUrls = (body.override_urls as Record<string, string>) ?? {};
-    const existing = (source.independence_signals as Record<string, unknown>) ?? {};
+  // --- UPDATE_TAGS → delete-then-insert tag assignment ---
+  if (action === "update_tags") {
+    const newTagIds = (body.tag_ids as string[]) ?? [];
 
-    // Whitelist: only allow known trust signal keys
-    const safeOverrides: Record<string, boolean> = {};
-    for (const [key, value] of Object.entries(trustOverrides)) {
-      if ((ALL_TRUST_KEYS as readonly string[]).includes(key)) {
-        safeOverrides[key] = value;
+    // If source is already approved, also update source_tags to prevent split-brain
+    if (source.status === "approved") {
+      const { data: approvedSource } = await supabase
+        .from("sources")
+        .select("id")
+        .eq("feed_url", source.feed_url)
+        .limit(1)
+        .single();
+
+      if (approvedSource) {
+        await supabase.from("source_tags").delete().eq("source_id", approvedSource.id);
+        if (newTagIds.length > 0) {
+          await supabase.from("source_tags").insert(
+            newTagIds.map((tid: string) => ({ source_id: approvedSource.id, tag_id: tid }))
+          );
+        }
       }
     }
 
-    const manualOverrides: Record<string, boolean> = {
-      ...((existing._manual_overrides as Record<string, boolean>) ?? {}),
-    };
-    const overrideEvidence: Record<string, string> = {
-      ...((existing._override_evidence as Record<string, string>) ?? {}),
-    };
-
-    for (const [key, value] of Object.entries(safeOverrides)) {
-      if (value !== (existing as any)[key]) {
-        manualOverrides[key] = true; // editor changed it — mark manual
-      } else {
-        delete manualOverrides[key]; // reverted to auto-detected value — clear manual flag
-      }
-      if (overrideUrls[key]) {
-        overrideEvidence[key] = overrideUrls[key];
-      }
+    // Always update discovered_source_tags (delete-then-insert)
+    await supabase.from("discovered_source_tags").delete().eq("source_id", id);
+    if (newTagIds.length > 0) {
+      await supabase.from("discovered_source_tags").insert(
+        newTagIds.map((tid: string) => ({
+          source_id: id,
+          tag_id: tid,
+          edited_by: curator.id,
+        }))
+      );
     }
 
-    const merged = {
-      ...existing,
-      ...safeOverrides,
-      _manual_overrides: manualOverrides,
-      _override_evidence: overrideEvidence,
-    };
-
-    const { error: updateErr } = await supabase
-      .from("discovered_sources")
-      .update({ independence_signals: merged })
-      .eq("id", id);
-
-    if (updateErr) {
-      return NextResponse.json({ error: updateErr.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, signals: merged });
+    return NextResponse.json({ success: true, tag_ids: newTagIds });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
