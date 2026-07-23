@@ -30,7 +30,8 @@ const PLATFORM_TO_SLUG: Record<string, string> = {
 
 export interface EnrichmentResult {
   suggested_tag_slugs: string[];
-  editorial_standards_url?: string; // kept as raw data (not a tag)
+  editorial_standards_url?: string;
+  meta_description?: string;
   _enrichment_failed?: boolean;
 }
 
@@ -224,7 +225,12 @@ export async function detectTrustSignals(
       suggested_tag_slugs.push("no-trackers");
     }
 
-    return { suggested_tag_slugs, editorial_standards_url, _enrichment_failed: false };
+    // Extract meta description
+    const metaMatch = html.match(/<meta[^>]+name="description"[^>]+content="([^"]+)"/i)
+      ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+name="description"/i);
+    const meta_description = metaMatch?.[1] ?? undefined;
+
+    return { suggested_tag_slugs, editorial_standards_url, meta_description, _enrichment_failed: false };
   } catch {
     return { suggested_tag_slugs: [], _enrichment_failed: true };
   }
