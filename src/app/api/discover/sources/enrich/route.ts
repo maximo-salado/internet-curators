@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   // Fetch source (include platform for tag mapping)
   const { data: source, error: fetchErr } = await supabase
     .from("discovered_sources")
-    .select("id, site_url, platform, independence_signals")
+    .select("id, site_url, platform, description, independence_signals")
     .eq("id", sourceId)
     .single();
 
@@ -71,8 +71,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // Persist editorial_standards_url in jsonb (it's a URL, not a tag)
-  // Only mark _enrichment_attempted on successful jsonb update
+  // Persist editorial_standards_url and meta_description in jsonb
   const update: Record<string, unknown> = { _enrichment_attempted: true };
   if (result.editorial_standards_url) {
     update.editorial_standards_url = result.editorial_standards_url;
@@ -85,6 +84,14 @@ export async function POST(req: Request) {
 
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  }
+
+  // Update description from meta if source has none
+  if (result.meta_description && !source.description) {
+    await supabase
+      .from("discovered_sources")
+      .update({ description: result.meta_description })
+      .eq("id", sourceId);
   }
 
   return NextResponse.json({
