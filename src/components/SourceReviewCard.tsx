@@ -50,6 +50,7 @@ interface Props {
   source: DiscoveredSource;
   isEditor: boolean;
   onTransition: (id: string, to: string) => void;
+  onSignalsUpdated?: (sourceId: string, signals: Record<string, unknown>) => void;
 }
 
 const platformColors: Record<string, string> = {
@@ -72,11 +73,26 @@ function normalizeCCLicense(raw: string): string {
   return version ? `CC ${formatted} ${version}` : `CC ${formatted}`;
 }
 
-export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
+export function SourceReviewCard({ source, isEditor, onTransition, onSignalsUpdated }: Props) {
   const [loading, setLoading] = useState(false);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const sig = source.independence_signals;
+
+  // --- Trust signal override state ---
+  const [editingTrust, setEditingTrust] = useState(false);
+  const [trustOverrides, setTrustOverrides] = useState<Record<string, boolean>>({});
+  const [overrideUrls, setOverrideUrls] = useState<Record<string, string>>({});
+
+  const isManual = (key: string) => {
+    const overrides = (sig as any)?._manual_overrides ?? {};
+    return overrides[key] === true;
+  };
+
+  const effectiveValue = (key: string) => {
+    if (key in trustOverrides) return trustOverrides[key];
+    return (sig as any)?.[key] ?? false;
+  };
 
   const DRAFT_KEY = `ic:source-tags:${source.id}`;
 
@@ -238,7 +254,111 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
             ⚠ unchecked
           </span>
         )}
+
+        {/* Edit trust signals toggle */}
+        {isEditor && (
+          <button
+            onClick={() => setEditingTrust(!editingTrust)}
+            className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors ml-1"
+            title="Edit trust signals"
+          >
+            ✎
+          </button>
+        )}
       </div>
+
+      {/* Inline trust signal editor */}
+      {editingTrust && (
+        <div className="mt-2 border border-zinc-700 rounded-lg bg-zinc-800/50 p-3">
+          <p className="text-[10px] text-emerald-400 uppercase tracking-wider mb-2">Verified Membership</p>
+          <div className="grid grid-cols-2 gap-1.5 mb-3">
+            {([
+              { key: "content_credentials", label: "Content Credentials" },
+              { key: "trust_project", label: "Trust Project" },
+              { key: "jti_certified", label: "JTI Certified" },
+              { key: "ifcn_signatory", label: "IFCN Signatory" },
+            ] as const).map(({ key, label }) => (
+              <div key={key} className="flex flex-col gap-0.5">
+                <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={effectiveValue(key)}
+                    onChange={(e) => setTrustOverrides((prev) => ({ ...prev, [key]: e.target.checked }))}
+                    className="rounded border-zinc-600 bg-zinc-700"
+                  />
+                  {label}
+                  {isManual(key) && <span className="text-[9px] text-zinc-600">manual</span>}
+                </label>
+                {effectiveValue(key) && !(sig as any)?.[key] && (
+                  <input
+                    type="url"
+                    placeholder="Paste evidence URL..."
+                    value={overrideUrls[key] ?? ""}
+                    onChange={(e) => setOverrideUrls((prev) => ({ ...prev, [key]: e.target.value }))}
+                    className="ml-5 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-300 placeholder:text-zinc-600"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <p className="text-[10px] text-amber-400 uppercase tracking-wider mb-2">Values Alignment</p>
+          <div className="grid grid-cols-2 gap-1.5 mb-3">
+            {([
+              { key: "creative_commons", label: "Creative Commons" },
+              { key: "not_by_ai", label: "Not by AI" },
+              { key: "indieweb", label: "IndieWeb" },
+            ] as const).map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={effectiveValue(key)}
+                  onChange={(e) => setTrustOverrides((prev) => ({ ...prev, [key]: e.target.checked }))}
+                  className="rounded border-zinc-600 bg-zinc-700"
+                />
+                {label}
+                {isManual(key) && <span className="text-[9px] text-zinc-600">manual</span>}
+              </label>
+            ))}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch(`/api/discover/sources/${source.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      action: "update_trust_signals",
+                      trust_overrides: trustOverrides,
+                      override_urls: overrideUrls,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (data.success && data.signals) {
+                    onSignalsUpdated?.(source.id, data.signals);
+                  }
+                } catch {}
+                setEditingTrust(false);
+              }}
+              className="rounded bg-emerald-800 px-2 py-1 text-[11px] text-emerald-300 hover:bg-emerald-700"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => {
+                setEditingTrust(false);
+                setTrustOverrides({});
+                setOverrideUrls({});
+              }}
+              className="rounded bg-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:bg-zinc-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Title */}
       <a
