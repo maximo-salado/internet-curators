@@ -18,22 +18,9 @@ interface DiscoveredSource {
     self_hosted?: boolean;
     custom_domain?: boolean;
     has_trackers?: boolean;
-    // Trust signals — verified membership (emerald green)
-    content_credentials?: boolean;
-    trust_project?: boolean;
-    jti_certified?: boolean;
-    ifcn_signatory?: boolean;
-    // Trust signals — values alignment (amber)
-    creative_commons?: string;
-    not_by_ai?: boolean;
-    indieweb?: boolean;
-    // Research aid (link, not badge)
-    editorial_standards_url?: string;
     // Metadata
     _enrichment_failed?: boolean;
     _enrichment_attempted?: boolean;
-    // Manual override tracking
-    _manual_overrides?: Record<string, boolean>;
   };
   status: string;
   discovered_at: string;
@@ -89,13 +76,7 @@ export default function ReviewQueuePage() {
       .finally(() => setLoading(false));
   }, [activeStatus]);
 
-const TRUST_KEYS = [
-  "content_credentials", "trust_project", "jti_certified", "ifcn_signatory",
-  "creative_commons", "not_by_ai", "indieweb",
-];
-
-  // Client-side filter: match source.suggested_tags against active filter slugs,
-  // then sort badge-holders to the top.
+  // Client-side filter: match source.suggested_tags against active filter slugs
   const filteredSources = useMemo(() => {
     let result = sources;
 
@@ -113,19 +94,7 @@ const TRUST_KEYS = [
       }
     }
 
-    return [...result].sort((a, b) => {
-      const sigA = a.independence_signals ?? {};
-      const sigB = b.independence_signals ?? {};
-      const aHasSignal = TRUST_KEYS.some((k) =>
-        sigA[k as keyof typeof sigA] != null && sigA[k as keyof typeof sigA] !== false
-      );
-      const bHasSignal = TRUST_KEYS.some((k) =>
-        sigB[k as keyof typeof sigB] != null && sigB[k as keyof typeof sigB] !== false
-      );
-      if (aHasSignal && !bHasSignal) return -1;
-      if (!aHasSignal && bHasSignal) return 1;
-      return 0;
-    });
+    return result;
   }, [sources, filterTagSlugs, slugToName]);
 
   const enrichSources = async (items: DiscoveredSource[]) => {
@@ -151,18 +120,11 @@ const TRUST_KEYS = [
       results.forEach((result, j) => {
         if (result.status !== "fulfilled") return;
         const data = result.value;
-        if (data.enriched && data.signals) {
+        if (data.enriched) {
           setSources((prev) =>
             prev.map((s) =>
               s.id === batch[j].id
-                ? {
-                    ...s,
-                    independence_signals: {
-                      ...s.independence_signals,
-                      ...data.signals,
-                      _enrichment_attempted: true,
-                    },
-                  }
+                ? { ...s, independence_signals: { ...s.independence_signals, _enrichment_attempted: true } }
                 : s
             )
           );
@@ -220,10 +182,6 @@ const TRUST_KEYS = [
         activeTagSlugs={filterTagSlugs}
       />
 
-      <p className="text-[10px] text-zinc-600 mb-3">
-        Sources with trust signals shown first
-      </p>
-
       {filteredSources.length === 0 ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-12 text-center">
           {filterTagSlugs.length > 0 ? (
@@ -241,15 +199,6 @@ const TRUST_KEYS = [
               isEditor={true}
               onTransition={(id) => {
                 setSources((prev) => prev.filter((s) => s.id !== id));
-              }}
-              onSignalsUpdated={(sourceId, signals) => {
-                setSources((prev) =>
-                  prev.map((s) =>
-                    s.id === sourceId
-                      ? { ...s, independence_signals: { ...s.independence_signals, ...signals } }
-                      : s
-                  )
-                );
               }}
             />
           ))}

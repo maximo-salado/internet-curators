@@ -25,22 +25,9 @@ interface DiscoveredSource {
     self_hosted?: boolean;
     custom_domain?: boolean;
     has_trackers?: boolean;
-    // Trust signals — verified membership (emerald green)
-    content_credentials?: boolean;
-    trust_project?: boolean;
-    jti_certified?: boolean;
-    ifcn_signatory?: boolean;
-    // Trust signals — values alignment (amber)
-    creative_commons?: string;
-    not_by_ai?: boolean;
-    indieweb?: boolean;
-    // Research aid (link, not badge)
-    editorial_standards_url?: string;
     // Metadata
     _enrichment_failed?: boolean;
     _enrichment_attempted?: boolean;
-    // Manual override tracking
-    _manual_overrides?: Record<string, boolean>;
   };
   status: string;
   discovered_at: string;
@@ -50,7 +37,6 @@ interface Props {
   source: DiscoveredSource;
   isEditor: boolean;
   onTransition: (id: string, to: string) => void;
-  onSignalsUpdated?: (sourceId: string, signals: Record<string, unknown>) => void;
 }
 
 const platformColors: Record<string, string> = {
@@ -74,27 +60,11 @@ function normalizeCCLicense(raw: string): string {
   return version ? `CC ${formatted} ${version}` : `CC ${formatted}`;
 }
 
-export function SourceReviewCard({ source, isEditor, onTransition, onSignalsUpdated }: Props) {
+export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
   const [loading, setLoading] = useState(false);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const sig = source.independence_signals;
-
-  // --- Trust signal override state ---
-  const [editingTrust, setEditingTrust] = useState(false);
-  const [trustOverrides, setTrustOverrides] = useState<Record<string, boolean>>({});
-  const [overrideUrls, setOverrideUrls] = useState<Record<string, string>>({});
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  const isManual = (key: string) => {
-    const overrides = (sig as any)?._manual_overrides ?? {};
-    return overrides[key] === true;
-  };
-
-  const effectiveValue = (key: string) => {
-    if (key in trustOverrides) return trustOverrides[key];
-    return (sig as any)?.[key] ?? false;
-  };
 
   const DRAFT_KEY = `ic:source-tags:${source.id}`;
 
@@ -177,210 +147,7 @@ export function SourceReviewCard({ source, isEditor, onTransition, onSignalsUpda
             trackers
           </span>
         )}
-
-        {/* Verified membership */}
-        {sig?.content_credentials && (
-          <span
-            title="Content Credentials verified"
-            className={`rounded-full bg-emerald-900/40 px-2 py-0.5 text-[11px] font-medium text-emerald-300${sig._manual_overrides?.content_credentials ? " border border-dashed border-emerald-600" : ""}`}
-          >
-            content credentials
-          </span>
-        )}
-        {sig?.trust_project && (
-          <span
-            title="Trust Project member"
-            className={`rounded-full bg-emerald-900/40 px-2 py-0.5 text-[11px] font-medium text-emerald-300${sig._manual_overrides?.trust_project ? " border border-dashed border-emerald-600" : ""}`}
-          >
-            trust project
-          </span>
-        )}
-        {sig?.jti_certified && (
-          <span
-            title="JTI certified"
-            className={`rounded-full bg-emerald-900/40 px-2 py-0.5 text-[11px] font-medium text-emerald-300${sig._manual_overrides?.jti_certified ? " border border-dashed border-emerald-600" : ""}`}
-          >
-            jti certified
-          </span>
-        )}
-        {sig?.ifcn_signatory && (
-          <span
-            title="IFCN signatory"
-            className={`rounded-full bg-emerald-900/40 px-2 py-0.5 text-[11px] font-medium text-emerald-300${sig._manual_overrides?.ifcn_signatory ? " border border-dashed border-emerald-600" : ""}`}
-          >
-            ifcn signatory
-          </span>
-        )}
-
-        {/* Values alignment */}
-        {sig?.creative_commons && (
-          <span
-            title="Creative Commons licensed"
-            className={`rounded-full bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-300${sig._manual_overrides?.creative_commons ? " border border-dashed border-amber-600" : ""}`}
-          >
-            {typeof sig.creative_commons === "string" ? normalizeCCLicense(sig.creative_commons) : "CC licensed"}
-          </span>
-        )}
-        {sig?.not_by_ai && (
-          <span
-            title="Not By AI pledge"
-            className={`rounded-full bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-300${sig._manual_overrides?.not_by_ai ? " border border-dashed border-amber-600" : ""}`}
-          >
-            not by ai
-          </span>
-        )}
-        {sig?.indieweb && (
-          <span
-            title="IndieWeb participant"
-            className={`rounded-full bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-300${sig._manual_overrides?.indieweb ? " border border-dashed border-amber-600" : ""}`}
-          >
-            indieweb
-          </span>
-        )}
-
-        {/* Research aid */}
-        {sig?.editorial_standards_url && (() => {
-          const rawUrl = sig.editorial_standards_url;
-          const resolved = rawUrl.startsWith("http")
-            ? rawUrl
-            : (rawUrl.startsWith("/") || rawUrl.startsWith("."))
-              ? (() => { try { return new URL(rawUrl, source.site_url).href; } catch { return null; } })()
-              : null;
-          if (!resolved || !/^https?:\/\//.test(resolved)) return null;
-          return (
-            <a
-              href={resolved}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2 ml-1"
-            >
-              → standards
-            </a>
-          );
-        })()}
-
-        {/* Enrichment failure */}
-        {sig?._enrichment_failed && (
-          <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
-            ⚠ unchecked
-          </span>
-        )}
-
-        {/* Edit trust signals toggle */}
-        {isEditor && (
-          <button
-            onClick={() => setEditingTrust(!editingTrust)}
-            className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors ml-1"
-            title="Edit trust signals"
-          >
-            ✎
-          </button>
-        )}
       </div>
-
-      {/* Inline trust signal editor */}
-      {editingTrust && (
-        <div className="mt-2 border border-zinc-700 rounded-lg bg-zinc-800/50 p-3">
-          <p className="text-[10px] text-emerald-400 uppercase tracking-wider mb-2">Verified Membership</p>
-          <div className="grid grid-cols-2 gap-1.5 mb-3">
-            {([
-              { key: "content_credentials", label: "Content Credentials" },
-              { key: "trust_project", label: "Trust Project" },
-              { key: "jti_certified", label: "JTI Certified" },
-              { key: "ifcn_signatory", label: "IFCN Signatory" },
-            ] as const).map(({ key, label }) => (
-              <div key={key} className="flex flex-col gap-0.5">
-                <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={effectiveValue(key)}
-                    onChange={(e) => setTrustOverrides((prev) => ({ ...prev, [key]: e.target.checked }))}
-                    className="rounded border-zinc-600 bg-zinc-700"
-                  />
-                  {label}
-                  {isManual(key) && <span className="text-[9px] text-zinc-600">manual</span>}
-                </label>
-                {effectiveValue(key) && !(sig as any)?.[key] && (
-                  <input
-                    type="url"
-                    placeholder="Paste evidence URL..."
-                    value={overrideUrls[key] ?? ""}
-                    onChange={(e) => setOverrideUrls((prev) => ({ ...prev, [key]: e.target.value }))}
-                    className="ml-5 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-300 placeholder:text-zinc-600"
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-
-          <p className="text-[10px] text-amber-400 uppercase tracking-wider mb-2">Values Alignment</p>
-          <div className="grid grid-cols-2 gap-1.5 mb-3">
-            {([
-              { key: "creative_commons", label: "Creative Commons" },
-              { key: "not_by_ai", label: "Not by AI" },
-              { key: "indieweb", label: "IndieWeb" },
-            ] as const).map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={effectiveValue(key)}
-                  onChange={(e) => setTrustOverrides((prev) => ({ ...prev, [key]: e.target.checked }))}
-                  className="rounded border-zinc-600 bg-zinc-700"
-                />
-                {label}
-                {isManual(key) && <span className="text-[9px] text-zinc-600">manual</span>}
-              </label>
-            ))}
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={async () => {
-                try {
-                  const res = await fetch(`/api/discover/sources/${source.id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      action: "update_trust_signals",
-                      trust_overrides: trustOverrides,
-                      override_urls: overrideUrls,
-                    }),
-                  });
-                  const data = await res.json();
-                  if (data.success && data.signals) {
-                    onSignalsUpdated?.(source.id, data.signals);
-                    setTrustOverrides({});
-                    setOverrideUrls({});
-                    setSaveError(null);
-                    setEditingTrust(false);
-                  } else {
-                    setSaveError(data.error || "Save failed");
-                  }
-                } catch {
-                  setSaveError("Network error — try again");
-                }
-              }}
-              className="rounded bg-emerald-800 px-2 py-1 text-[11px] text-emerald-300 hover:bg-emerald-700"
-            >
-              Save
-            </button>
-            <button
-              onClick={() => {
-                setEditingTrust(false);
-                setTrustOverrides({});
-                setOverrideUrls({});
-                setSaveError(null);
-              }}
-              className="rounded bg-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:bg-zinc-600"
-            >
-              Cancel
-            </button>
-          </div>
-          {saveError && (
-            <p className="mt-2 text-[10px] text-red-400">{saveError}</p>
-          )}
-        </div>
-      )}
 
       {/* Title */}
       <a
