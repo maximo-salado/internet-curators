@@ -25,6 +25,22 @@ interface DiscoveredSource {
     self_hosted?: boolean;
     custom_domain?: boolean;
     has_trackers?: boolean;
+    // Trust signals — verified membership (emerald green)
+    content_credentials?: boolean;
+    trust_project?: boolean;
+    jti_certified?: boolean;
+    ifcn_signatory?: boolean;
+    // Trust signals — values alignment (amber)
+    creative_commons?: string;
+    not_by_ai?: boolean;
+    indieweb?: boolean;
+    // Research aid (link, not badge)
+    editorial_standards_url?: string;
+    // Metadata
+    _enrichment_failed?: boolean;
+    _enrichment_attempted?: boolean;
+    // Manual override tracking
+    _manual_overrides?: Record<string, boolean>;
   };
   status: string;
   discovered_at: string;
@@ -49,6 +65,12 @@ const platformColors: Record<string, string> = {
   medium: "bg-zinc-800 text-zinc-400",
   blogger: "bg-yellow-900/50 text-yellow-300",
 };
+
+function normalizeCCLicense(raw: string): string {
+  const [type, version] = raw.split("/");
+  const formatted = type.split("-").map((p) => p.toUpperCase()).join("-");
+  return version ? `CC ${formatted} ${version}` : `CC ${formatted}`;
+}
 
 export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
   const [loading, setLoading] = useState(false);
@@ -135,6 +157,85 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
         {sig?.has_trackers && (
           <span className="rounded-full bg-yellow-900/50 px-2 py-0.5 text-[11px] font-medium text-yellow-300">
             trackers
+          </span>
+        )}
+
+        {/* Verified membership */}
+        {sig?.content_credentials && (
+          <span
+            title="Content Credentials verified"
+            className={`rounded-full bg-emerald-900/40 px-2 py-0.5 text-[11px] font-medium text-emerald-300${sig._manual_overrides?.content_credentials ? " border border-dashed border-emerald-600" : ""}`}
+          >
+            content credentials
+          </span>
+        )}
+        {sig?.trust_project && (
+          <span
+            title="Trust Project member"
+            className={`rounded-full bg-emerald-900/40 px-2 py-0.5 text-[11px] font-medium text-emerald-300${sig._manual_overrides?.trust_project ? " border border-dashed border-emerald-600" : ""}`}
+          >
+            trust project
+          </span>
+        )}
+        {sig?.jti_certified && (
+          <span
+            title="JTI certified"
+            className={`rounded-full bg-emerald-900/40 px-2 py-0.5 text-[11px] font-medium text-emerald-300${sig._manual_overrides?.jti_certified ? " border border-dashed border-emerald-600" : ""}`}
+          >
+            jti certified
+          </span>
+        )}
+        {sig?.ifcn_signatory && (
+          <span
+            title="IFCN signatory"
+            className={`rounded-full bg-emerald-900/40 px-2 py-0.5 text-[11px] font-medium text-emerald-300${sig._manual_overrides?.ifcn_signatory ? " border border-dashed border-emerald-600" : ""}`}
+          >
+            ifcn signatory
+          </span>
+        )}
+
+        {/* Values alignment */}
+        {sig?.creative_commons && (
+          <span
+            title="Creative Commons licensed"
+            className={`rounded-full bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-300${sig._manual_overrides?.creative_commons ? " border border-dashed border-amber-600" : ""}`}
+          >
+            {typeof sig.creative_commons === "string" ? normalizeCCLicense(sig.creative_commons) : "CC licensed"}
+          </span>
+        )}
+        {sig?.not_by_ai && (
+          <span
+            title="Not By AI pledge"
+            className={`rounded-full bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-300${sig._manual_overrides?.not_by_ai ? " border border-dashed border-amber-600" : ""}`}
+          >
+            not by ai
+          </span>
+        )}
+        {sig?.indieweb && (
+          <span
+            title="IndieWeb participant"
+            className={`rounded-full bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-300${sig._manual_overrides?.indieweb ? " border border-dashed border-amber-600" : ""}`}
+          >
+            indieweb
+          </span>
+        )}
+
+        {/* Research aid */}
+        {sig?.editorial_standards_url && (
+          <a
+            href={sig.editorial_standards_url.startsWith("http") ? sig.editorial_standards_url : new URL(sig.editorial_standards_url, source.site_url).href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2 ml-1"
+          >
+            → standards
+          </a>
+        )}
+
+        {/* Enrichment failure */}
+        {sig?._enrichment_failed && (
+          <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
+            ⚠ unchecked
           </span>
         )}
       </div>
