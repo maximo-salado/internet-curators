@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import { FiltersBar } from "@/components/FiltersBar";
-import { SourceReviewCard } from "@/components/SourceReviewCard";
 
 interface DiscoveredSource {
   id: string;
@@ -14,10 +14,14 @@ interface DiscoveredSource {
   language: string;
   recent_posts: { title: string; link: string; date: string }[];
   suggested_tags: string[];
+  tags?: { slug: string; name: string; facet: string }[];
   independence_signals: {
     self_hosted?: boolean;
     custom_domain?: boolean;
     has_trackers?: boolean;
+    // Metadata
+    _enrichment_failed?: boolean;
+    _enrichment_attempted?: boolean;
   };
   status: string;
   discovered_at: string;
@@ -64,6 +68,7 @@ export default function ReviewQueuePage() {
           setIsEditor(true);
           setSources(data.items ?? []);
           setFilterTagSlugs([]); // reset filters on tab switch
+          enrichSources(data.items ?? []);
         } else {
           setIsEditor(false);
         }
@@ -72,21 +77,76 @@ export default function ReviewQueuePage() {
       .finally(() => setLoading(false));
   }, [activeStatus]);
 
+  // Re-fetch on window focus (editor returns from detail page after action)
+  useEffect(() => {
+    const onFocus = () => {
+      fetch(`/api/discover/sources?status=${activeStatus}&limit=50`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.items) setSources(data.items ?? []);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [activeStatus]);
+
   // Client-side filter: match source.suggested_tags against active filter slugs
   const filteredSources = useMemo(() => {
-    if (filterTagSlugs.length === 0) return sources;
-    const filterNames = filterTagSlugs
-      .map((slug) => slugToName.get(slug))
-      .filter(Boolean) as string[];
-    if (filterNames.length === 0) return sources;
+    let result = sources;
 
-    return sources.filter((source) => {
-      if (!source.suggested_tags || source.suggested_tags.length === 0) return false;
-      return source.suggested_tags.some((t) =>
-        filterNames.includes(t.toLowerCase())
-      );
-    });
+    if (filterTagSlugs.length > 0) {
+      const filterNames = filterTagSlugs
+        .map((slug) => slugToName.get(slug))
+        .filter(Boolean) as string[];
+      if (filterNames.length > 0) {
+        result = sources.filter((source) => {
+          if (!source.suggested_tags || source.suggested_tags.length === 0) return false;
+          return source.suggested_tags.some((t) =>
+            filterNames.includes(t.toLowerCase())
+          );
+        });
+      }
+    }
+
+    return result;
   }, [sources, filterTagSlugs, slugToName]);
+
+  const enrichSources = async (items: DiscoveredSource[]) => {
+    const pending = items.filter((source) => {
+      const sig = (source.independence_signals ?? {}) as Record<string, unknown>;
+      return !sig._enrichment_attempted;
+    });
+    if (pending.length === 0) return;
+
+    const BATCH = 5;
+    for (let i = 0; i < pending.length; i += BATCH) {
+      const batch = pending.slice(i, i + BATCH);
+      const results = await Promise.allSettled(
+        batch.map((source) =>
+          fetch("/api/discover/sources/enrich", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source_id: source.id }),
+          }).then((r) => r.json())
+        )
+      );
+
+      results.forEach((result, j) => {
+        if (result.status !== "fulfilled") return;
+        const data = result.value;
+        if (data.enriched) {
+          setSources((prev) =>
+            prev.map((s) =>
+              s.id === batch[j].id
+                ? { ...s, independence_signals: { ...s.independence_signals, _enrichment_attempted: true } }
+                : s
+            )
+          );
+        }
+      });
+    }
+  };
 
   if (loading) {
     return (
@@ -148,14 +208,35 @@ export default function ReviewQueuePage() {
       ) : (
         <div className="space-y-4">
           {filteredSources.map((source) => (
-            <SourceReviewCard
+            <Link
               key={source.id}
-              source={source}
-              isEditor={true}
-              onTransition={(id) => {
-                setSources((prev) => prev.filter((s) => s.id !== id));
-              }}
-            />
+              href={`/review/${source.id}`}
+              className="block rounded-lg border border-zinc-800 bg-zinc-900/80 p-4 hover:border-zinc-700 hover:bg-zinc-900 transition-colors"
+            >
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                {source.platform && (
+                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-400">
+                    {source.platform}
+                  </span>
+                )}
+                {source.language && (
+                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
+                    {source.language.toUpperCase()}
+                  </span>
+                )}
+                {source.tags?.map((tag) => (
+                  <span key={tag.slug} className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-300">
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+              <h2 className="font-medium text-zinc-200 leading-snug">
+                {source.title || "Untitled Source"}
+              </h2>
+              {source.description && (
+                <p className="mt-1 text-sm text-zinc-500 line-clamp-2">{source.description}</p>
+              )}
+            </Link>
           ))}
         </div>
       )}
