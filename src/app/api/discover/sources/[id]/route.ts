@@ -9,7 +9,7 @@ export async function PATCH(
   const supabase = await createClient();
   const { id } = await params;
   const body = await req.json();
-  const action = body.action as "approve" | "reject" | "pending" | "parked";
+  const action = body.action as "approve" | "reject" | "pending" | "parked" | "update_tags";
   const reason = (body.reason as string) ?? "";
   const tagIds = (body.tag_ids as string[]) ?? [];
 
@@ -114,18 +114,38 @@ export async function PATCH(
         .limit(1);
 
       if (sourceRows?.[0]) {
-        // Save editor-assigned tags (always clear old tags, then insert if any selected)
-        await supabase.from("source_tags").delete().eq("source_id", sourceRows[0].id);
-        if (tagIds.length > 0) {
-          const tagRows = tagIds.map((tag_id: string) => ({
-            source_id: sourceRows[0].id,
+        const newSourceId = sourceRows[0].id;
+
+        // Clear old tags from source_tags before re-inserting (handles re-approval)
+        await supabase.from("source_tags").delete().eq("source_id", newSourceId);
+
+        // Collect all tag IDs (editor-assigned + discovered), deduplicate, insert once
+        const allTagIds = new Set<string>(tagIds);
+
+        const { data: dst } = await supabase
+          .from("discovered_source_tags")
+          .select("tag_id")
+          .eq("source_id", id);
+        if (dst?.length) {
+          for (const r of dst) allTagIds.add(r.tag_id);
+        }
+
+        if (allTagIds.size > 0) {
+          const tagRows = [...allTagIds].map((tag_id) => ({
+            source_id: newSourceId,
             tag_id,
           }));
-          await supabase.from("source_tags").insert(tagRows);
+          const { error: tagInsertErr } = await supabase.from("source_tags").upsert(tagRows, {
+            onConflict: "source_id,tag_id",
+            ignoreDuplicates: true,
+          });
+          if (tagInsertErr) {
+            console.error("Failed to copy tags on approve", tagInsertErr);
+          }
         }
 
         await refreshStaleSources([{
-          id: sourceRows[0].id,
+          id: newSourceId,
           feed_url: sourceRows[0].feed_url,
           last_fetched_at: null,
         }]);
@@ -203,6 +223,52 @@ export async function PATCH(
       .eq("id", id);
 
     return NextResponse.json({ success: true, action: "parked" });
+  }
+
+  // --- UPDATE_TAGS → delete-then-insert tag assignment ---
+  if (action === "update_tags") {
+    const newTagIds = (body.tag_ids as string[]) ?? [];
+
+    // If source is already approved, also update source_tags to prevent split-brain
+    if (source.status === "approved") {
+      const { data: approvedSource } = await supabase
+        .from("sources")
+        .select("id")
+        .eq("feed_url", source.feed_url)
+        .limit(1)
+        .single();
+
+      if (approvedSource) {
+        await supabase.from("source_tags").delete().eq("source_id", approvedSource.id);
+        if (newTagIds.length > 0) {
+          await supabase.from("source_tags").insert(
+            newTagIds.map((tid: string) => ({ source_id: approvedSource.id, tag_id: tid }))
+          );
+        }
+      }
+    }
+
+    // Always update discovered_source_tags (delete-then-insert)
+    const { error: delErr } = await supabase.from("discovered_source_tags").delete().eq("source_id", id);
+    if (delErr) {
+      console.error("Failed to delete discovered_source_tags", delErr);
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
+    if (newTagIds.length > 0) {
+      const { error: insErr } = await supabase.from("discovered_source_tags").insert(
+        newTagIds.map((tid: string) => ({
+          source_id: id,
+          tag_id: tid,
+          edited_by: curator.id,
+        }))
+      );
+      if (insErr) {
+        console.error("Failed to insert discovered_source_tags", insErr);
+        return NextResponse.json({ error: insErr.message }, { status: 500 });
+      }
+    }
+
+    return NextResponse.json({ success: true, tag_ids: newTagIds });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
