@@ -89,19 +89,47 @@ export default function ReviewQueuePage() {
       .finally(() => setLoading(false));
   }, [activeStatus]);
 
-  // Client-side filter: match source.suggested_tags against active filter slugs
-  const filteredSources = useMemo(() => {
-    if (filterTagSlugs.length === 0) return sources;
-    const filterNames = filterTagSlugs
-      .map((slug) => slugToName.get(slug))
-      .filter(Boolean) as string[];
-    if (filterNames.length === 0) return sources;
+  const trustKeys = [
+    "content_credentials",
+    "trust_project",
+    "jti_certified",
+    "ifcn_signatory",
+    "creative_commons",
+    "not_by_ai",
+    "indieweb",
+  ];
 
-    return sources.filter((source) => {
-      if (!source.suggested_tags || source.suggested_tags.length === 0) return false;
-      return source.suggested_tags.some((t) =>
-        filterNames.includes(t.toLowerCase())
+  // Client-side filter: match source.suggested_tags against active filter slugs,
+  // then sort badge-holders to the top.
+  const filteredSources = useMemo(() => {
+    let result = sources;
+
+    if (filterTagSlugs.length > 0) {
+      const filterNames = filterTagSlugs
+        .map((slug) => slugToName.get(slug))
+        .filter(Boolean) as string[];
+      if (filterNames.length > 0) {
+        result = sources.filter((source) => {
+          if (!source.suggested_tags || source.suggested_tags.length === 0) return false;
+          return source.suggested_tags.some((t) =>
+            filterNames.includes(t.toLowerCase())
+          );
+        });
+      }
+    }
+
+    return [...result].sort((a, b) => {
+      const sigA = a.independence_signals ?? {};
+      const sigB = b.independence_signals ?? {};
+      const aHasSignal = trustKeys.some((k) =>
+        sigA[k as keyof typeof sigA] != null && sigA[k as keyof typeof sigA] !== false
       );
+      const bHasSignal = trustKeys.some((k) =>
+        sigB[k as keyof typeof sigB] != null && sigB[k as keyof typeof sigB] !== false
+      );
+      if (aHasSignal && !bHasSignal) return -1;
+      if (!aHasSignal && bHasSignal) return 1;
+      return 0;
     });
   }, [sources, filterTagSlugs, slugToName]);
 
@@ -192,6 +220,10 @@ export default function ReviewQueuePage() {
         onFilterChange={setFilterTagSlugs}
         activeTagSlugs={filterTagSlugs}
       />
+
+      <p className="text-[10px] text-zinc-600 mb-3">
+        Sources with trust signals shown first
+      </p>
 
       {filteredSources.length === 0 ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-12 text-center">
