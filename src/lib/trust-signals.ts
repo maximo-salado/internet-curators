@@ -229,35 +229,6 @@ export async function detectTrustSignals(
     return { suggested_tag_slugs: [], _enrichment_failed: true };
   }
 }
-            }
-          } else {
-            const slug = SIGNAL_TO_SLUG[rule.key];
-            if (slug) suggested_tag_slugs.push(slug);
-          }
-          break;
-        }
-      }
-    }
-
-    // Map platform to tag slug
-    if (platform && PLATFORM_TO_SLUG[platform.toLowerCase()]) {
-      suggested_tag_slugs.push(PLATFORM_TO_SLUG[platform.toLowerCase()]);
-    }
-
-    // Map no-trackers to tag slug
-    if (hasTrackers === false) {
-      suggested_tag_slugs.push("no-trackers");
-    }
-
-    return {
-      suggested_tag_slugs,
-      ...(editorial_standards_url ? { editorial_standards_url } : {}),
-      _enrichment_failed: false,
-    };
-  } catch {
-    return { suggested_tag_slugs: [], _enrichment_failed: true };
-  }
-}
 
 /**
  * Merge trust signals into existing independence_signals jsonb.

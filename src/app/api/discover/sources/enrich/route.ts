@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { detectTrustSignals, mergeTrustSignals } from "@/lib/trust-signals";
+import { detectTrustSignals } from "@/lib/trust-signals";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -24,10 +24,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "source_id required" }, { status: 400 });
   }
 
-  // Fetch source
+  // Fetch source (include platform for tag mapping)
   const { data: source, error: fetchErr } = await supabase
     .from("discovered_sources")
-    .select("id, site_url, independence_signals")
+    .select("id, site_url, platform, independence_signals")
     .eq("id", sourceId)
     .single();
 
@@ -45,14 +45,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ enriched: false, reason: "already_enriched" });
   }
 
-  // Run detection
-  const trustSignals = await detectTrustSignals(source.site_url);
+  // Run detection with new signature: site_url, platform, has_trackers
+  const result = await detectTrustSignals(
+    source.site_url,
+    source.platform ?? undefined,
+    (source.independence_signals as Record<string, unknown>)?.has_trackers as boolean | undefined,
+  );
 
-  // Merge and update
-  const merged = mergeTrustSignals(existing, trustSignals);
+  // Resolve slugs to tag IDs and insert into discovered_source_tags
+  if (result.suggested_tag_slugs.length > 0) {
+    const { data: tagRows, error: tagErr } = await supabase
+      .from("tags")
+      .select("id, slug")
+      .in("slug", result.suggested_tag_slugs);
+
+    if (!tagErr && tagRows) {
+      const tagIds = tagRows.map((t: { id: string }) => t.id);
+      // Upsert: ignore duplicates on (source_id, tag_id) conflict
+      await supabase.from("discovered_source_tags").upsert(
+        tagIds.map((tag_id: string) => ({ source_id: sourceId, tag_id })),
+        { onConflict: "source_id,tag_id", ignoreDuplicates: true },
+      );
+    }
+  }
+
+  // Persist editorial_standards_url in jsonb (it's a URL, not a tag)
+  // Only mark _enrichment_attempted on successful jsonb update
+  const update: Record<string, unknown> = { _enrichment_attempted: true };
+  if (result.editorial_standards_url) {
+    update.editorial_standards_url = result.editorial_standards_url;
+  }
+
   const { error: updateErr } = await supabase
     .from("discovered_sources")
-    .update({ independence_signals: merged })
+    .update({ independence_signals: { ...existing, ...update } })
     .eq("id", sourceId);
 
   if (updateErr) {
@@ -61,8 +87,8 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     enriched: true,
-    signals: trustSignals,
-    failed: !!trustSignals._enrichment_failed,
+    suggested_tag_slugs: result.suggested_tag_slugs,
+    failed: !!result._enrichment_failed,
     _enrichment_attempted: true,
   });
 }
