@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import { FiltersBar } from "@/components/FiltersBar";
-import { SourceReviewCard } from "@/components/SourceReviewCard";
 
 interface DiscoveredSource {
   id: string;
@@ -193,14 +193,30 @@ export default function ReviewQueuePage() {
       ) : (
         <div className="space-y-4">
           {filteredSources.map((source) => (
-            <SourceReviewCard
+            <Link
               key={source.id}
-              source={source}
-              isEditor={true}
-              onTransition={(id) => {
-                setSources((prev) => prev.filter((s) => s.id !== id));
-              }}
-            />
+              href={`/review/${source.id}`}
+              className="block rounded-lg border border-zinc-800 bg-zinc-900/80 p-4 hover:border-zinc-700 hover:bg-zinc-900 transition-colors"
+            >
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                {source.platform && (
+                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-400">
+                    {source.platform}
+                  </span>
+                )}
+                {source.language && (
+                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
+                    {source.language.toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <h2 className="font-medium text-zinc-200 leading-snug">
+                {source.title || "Untitled Source"}
+              </h2>
+              {source.description && (
+                <p className="mt-1 text-sm text-zinc-500 line-clamp-2">{source.description}</p>
+              )}
+            </Link>
           ))}
         </div>
       )}
