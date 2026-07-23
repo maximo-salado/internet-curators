@@ -14,6 +14,7 @@ interface DiscoveredSource {
   language: string;
   recent_posts: { title: string; link: string; date: string }[];
   suggested_tags: string[];
+  tags?: { slug: string; name: string; facet: string }[];
   independence_signals: {
     self_hosted?: boolean;
     custom_domain?: boolean;
@@ -223,6 +224,11 @@ export default function ReviewQueuePage() {
                     {source.language.toUpperCase()}
                   </span>
                 )}
+                {source.tags?.map((tag) => (
+                  <span key={tag.slug} className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-300">
+                    {tag.name}
+                  </span>
+                ))}
               </div>
               <h2 className="font-medium text-zinc-200 leading-snug">
                 {source.title || "Untitled Source"}
