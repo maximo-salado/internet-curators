@@ -3,6 +3,7 @@ import { refreshStaleSources } from "@/lib/feed-refresher";
 import { NextResponse } from "next/server";
 
 interface FeedItem {
+  articleId: string;
   title: string;
   link: string;
   pubDate: string;
@@ -10,21 +11,9 @@ interface FeedItem {
   sourceUrl: string;
   sourceId: string;
   feedUrl: string;
-  curatorNames: string[];
-  curatorIds: string[];
   contentSnippet: string;
   image?: string;
   tags?: { id: string; name: string; slug: string; facet: string }[];
-}
-
-function mulberry32(a: number) {
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 function seededShuffle<T>(arr: T[], seed: string): T[] {
@@ -41,6 +30,16 @@ function seededShuffle<T>(arr: T[], seed: string): T[] {
   return result;
 }
 
+function mulberry32(a: number) {
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export async function GET(req: Request) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
@@ -50,73 +49,21 @@ export async function GET(req: Request) {
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20));
   const tagSlugs = searchParams.get("tags")?.split(",").filter(Boolean) ?? [];
 
-  // "Your Feed" mode — only user's own sources + followed
-  // "Discover" mode — everything EXCEPT user's own sources
-  const feedMode = searchParams.get("feed");
-  let userCuratorId: string | null = null;
-  let followedIds: string[] = [];
-  let followedSourceIds: string[] = [];
-  let userId: string | null = null;
-  let excludeUserSourceIds: string[] | null = null;
-
-  if (feedMode === "your" || feedMode === "discover") {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      userId = user.id;
-      const { data: curator } = await supabase
-        .from("curators")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
-      if (curator) userCuratorId = curator.id;
-    }
-    if (feedMode === "your" && userId) {
-      const { data: userFollows } = await supabase
-        .from("user_follows")
-        .select("curator_id, source_id")
-        .eq("user_id", userId);
-      followedIds = (userFollows ?? [])
-        .filter((f: any) => f.curator_id)
-        .map((f: any) => f.curator_id);
-      followedSourceIds = (userFollows ?? [])
-        .filter((f: any) => f.source_id)
-        .map((f: any) => f.source_id);
-      const clientFollowed = searchParams.get("followed")?.split(",").filter(Boolean) ?? [];
-      followedIds = [...new Set([...followedIds, ...clientFollowed])];
-    }
-    if (feedMode === "discover" && userCuratorId) {
-      const { data: userSources } = await supabase
-        .from("sources")
-        .select("id, collection_id, collections!inner(curator_id)")
-        .eq("collections.curator_id", userCuratorId);
-      excludeUserSourceIds = (userSources ?? []).map((s: any) => s.id);
-    }
-  }
-
-  // 1. Get all source IDs with curator info (no RSS fetching — reads from articles cache)
-  const { data: sources, error } = await supabase
+  // 1. Get all sources
+  const { data: sources } = await supabase
     .from("sources")
-    .select("id, feed_url, title, site_url, last_fetched_at, collection_id, collections(curator_id, published, curators(display_name, id))");
+    .select("id, feed_url, title, site_url");
 
-  if (error || !sources?.length) return NextResponse.json({ items: [], total: 0, hasMore: false });
+  if (!sources?.length) return NextResponse.json({ items: [], total: 0, hasMore: false });
 
-  let sourceIds = sources.map((s) => s.id);
+  const sourceIds = sources.map((s) => s.id);
 
-  if (excludeUserSourceIds && excludeUserSourceIds.length > 0) {
-    sourceIds = sourceIds.filter((id) => !excludeUserSourceIds!.includes(id));
-  }
-  if (sourceIds.length === 0) return NextResponse.json({ items: [], total: 0, hasMore: false });
-
-  // 2. Read articles from DB cache, joined through to curator info
+  // 2. Get articles from all sources — simple join, no curator gating
   const { data: articles } = await supabase
     .from("articles")
     .select(`
-      title, link, pub_date, content_snippet, image, source_id,
-      sources!inner(id, title, feed_url, site_url, collection_id,
-        collections!inner(curator_id, published,
-          curators!inner(display_name, id)
-        )
-      )
+      id, title, link, pub_date, content_snippet, image, source_id,
+      sources!inner(id, title, feed_url, site_url)
     `)
     .in("source_id", sourceIds)
     .order("pub_date", { ascending: false })
@@ -124,52 +71,29 @@ export async function GET(req: Request) {
 
   if (!articles?.length) return NextResponse.json({ items: [], total: 0, hasMore: false });
 
-  // 3. Deduplicate by link, merge curator names
-  const seen = new Map<string, FeedItem & { publishedCurators: Set<string> }>();
-
+  // 3. Deduplicate by link
+  const seen = new Map<string, FeedItem>();
   for (const a of articles) {
     const s = a.sources as any;
-    const c = s?.collections as any;
-    const cu = c?.curators as any;
-    const curatorName = cu?.display_name ?? "Unknown";
-    const curatorId = cu?.id ?? null;
-    const isPublished = c?.published ?? false;
     const link = a.link;
-
-    const existing = seen.get(link);
-    if (existing) {
-      if (curatorName !== "Unknown") {
-        existing.curatorNames = [...new Set([...existing.curatorNames, curatorName])];
-      }
-      if (curatorId) {
-        existing.curatorIds = [...new Set([...existing.curatorIds, curatorId])];
-      }
-      if (isPublished && curatorId) {
-        existing.publishedCurators.add(curatorId);
-      }
-    } else {
-      seen.set(link, {
-        title: a.title,
-        link,
-        pubDate: a.pub_date,
-        sourceTitle: s?.title || "Unknown",
-        sourceUrl: s?.site_url || "",
-        sourceId: a.source_id || s?.id || "",
-        feedUrl: s?.feed_url || "",
-        curatorNames: curatorName !== "Unknown" ? [curatorName] : [],
-        curatorIds: curatorId ? [curatorId] : [],
-        contentSnippet: a.content_snippet ?? "",
-        image: a.image ?? undefined,
-        publishedCurators: new Set(
-          isPublished && curatorId ? [curatorId] : []
-        ),
-      });
-    }
+    if (seen.has(link)) continue;
+    seen.set(link, {
+      articleId: a.id,
+      title: a.title,
+      link,
+      pubDate: a.pub_date,
+      sourceTitle: s?.title || "Unknown",
+      sourceUrl: s?.site_url || "",
+      sourceId: a.source_id || s?.id || "",
+      feedUrl: s?.feed_url || "",
+      contentSnippet: a.content_snippet ?? "",
+      image: a.image ?? undefined,
+    });
   }
 
-  let rawItems = Array.from(seen.values());
+  let items: FeedItem[] = Array.from(seen.values());
 
-  // 3.5. Filter by tags (articles must have ALL specified tags)
+  // 4. Filter by tags
   if (tagSlugs.length > 0) {
     const { data: directFilterTags } = await supabase
       .from("tags")
@@ -193,8 +117,7 @@ export async function GET(req: Request) {
     }
 
     const allFilterTagIds = [...new Set([...slugToEffectiveIds.values()].flat())];
-
-    const articleLinks = rawItems.map((i) => i.link);
+    const articleLinks = items.map((i) => i.link);
 
     const { data: keywordTags } = await supabase
       .from("article_tags")
@@ -202,10 +125,7 @@ export async function GET(req: Request) {
       .in("tag_id", allFilterTagIds)
       .in("articles.link", articleLinks);
 
-    // sourceId is confirmed present on rawItems (field added at feed/route.ts:143)
-    const pageSourceIds = [...new Set(
-      rawItems.map((i) => (i as any).sourceId).filter(Boolean)
-    )];
+    const pageSourceIds = [...new Set(items.map((i) => i.sourceId).filter(Boolean))];
 
     const { data: inheritedTags } = await supabase
       .from("source_tags")
@@ -223,8 +143,8 @@ export async function GET(req: Request) {
     }
 
     const sourceIdToLinks = new Map<string, string[]>();
-    for (const item of rawItems) {
-      const sid = (item as any).sourceId;
+    for (const item of items) {
+      const sid = item.sourceId;
       if (!sid) continue;
       if (!sourceIdToLinks.has(sid)) sourceIdToLinks.set(sid, []);
       sourceIdToLinks.get(sid)!.push(item.link);
@@ -246,39 +166,14 @@ export async function GET(req: Request) {
       if (allMatch) matchingLinks.add(link);
     }
 
-    rawItems = rawItems.filter((item) => matchingLinks.has(item.link));
+    items = items.filter((item) => matchingLinks.has(item.link));
   }
 
-  // 4. "Your Feed" filter — only user's own sources + followed
-  if (feedMode === "your") {
-    if (!userCuratorId) {
-      return NextResponse.json({ items: [], total: 0, hasMore: false });
-    }
-    rawItems = rawItems.filter((item) => {
-      if (item.curatorIds.includes(userCuratorId!)) return true;
-      if (item.publishedCurators.size > 0 &&
-        item.curatorIds.some((id) => followedIds.includes(id))) return true;
-      return item.sourceId && followedSourceIds.includes(item.sourceId);
-    });
-  }
-
-  // 5. Two-tier attribution: strip names from private-only articles
-  let items: FeedItem[] = rawItems.map(({ publishedCurators, ...item }) => {
-    if (publishedCurators.size === 0) {
-      return { ...item, curatorNames: [] as string[] };
-    }
-    return item;
-  });
-
-  // 6. Sort or seed-based shuffle
-  if (feedMode === "discover" && seed) {
+  // 5. Sort or seed-based shuffle
+  if (seed) {
     items = seededShuffle(items, seed);
   } else {
-    if (sort === "popular") {
-      items.sort((a, b) => b.curatorNames.length - a.curatorNames.length);
-    } else {
-      items.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-    }
+    items.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
     // Interleave by source so no source dominates consecutively
     const bySource = new Map<string, typeof items>();
     for (const item of items) {
@@ -302,12 +197,13 @@ export async function GET(req: Request) {
     }
   }
 
-  // 8. Attach vote counts and tags (fetch for the requested page only)
+  // 6. Paginate
   const total = items.length;
   const page = items.slice(offset, offset + limit);
   const hasMore = offset + limit < total;
   const links = page.map((i) => i.link);
 
+  // 7. Attach vote counts
   const { data: votes } = await supabase
     .from("article_votes")
     .select("link, upvotes, downvotes")
@@ -318,7 +214,7 @@ export async function GET(req: Request) {
     voteMap.set(v.link, { upvotes: v.upvotes, downvotes: v.downvotes });
   }
 
-  // Attach tags — union of keyword-matched (article_tags) + inherited (source_tags)
+  // 8. Attach tags
   const pageSourceIds = [...new Set(page.map((i) => i.sourceId).filter(Boolean))];
 
   const { data: articleTags } = await supabase
@@ -365,7 +261,6 @@ export async function GET(req: Request) {
 }
 
 // Triggered by a cron job or manual call to refresh stale RSS sources into the articles cache.
-// Requires CRON_SECRET header to prevent unauthorized triggering.
 export async function POST(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {

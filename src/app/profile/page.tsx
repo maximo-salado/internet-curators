@@ -14,7 +14,7 @@ export default function ProfilePage() {
       const supabase = createClient();
       supabase.auth.getUser().then(({ data }) => {
         if (!data.user) {
-          router.push("/login");
+          router.push("/login?next=" + encodeURIComponent("/profile"));
           return;
         }
         setUser(data.user);
