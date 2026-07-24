@@ -184,8 +184,6 @@ export default function SavedPage() {
                 sourceTitle: item.sourceTitle,
                 sourceUrl: item.sourceUrl,
                 sourceId: item.sourceId,
-                curatorNames: [],
-                curatorIds: [],
                 contentSnippet: item.contentSnippet,
                 content: item.content,
                 image: item.image,
