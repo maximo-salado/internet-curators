@@ -27,10 +27,8 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
 
   const [topicTags, setTopicTags] = useState<Tag[]>([]);
   const [voiceTags, setVoiceTags] = useState<Tag[]>([]);
-  const [stanceTags, setStanceTags] = useState<Tag[]>([]);
   const [topicsOpen, setTopicsOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const [stanceOpen, setStanceOpen] = useState(false);
   const [expandedTopicParents, setExpandedTopicParents] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const filterRowRef = useRef<HTMLDivElement>(null);
@@ -51,12 +49,10 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
     Promise.all([
       fetch("/api/tags?facet=topic").then((r) => r.json()),
       fetch("/api/tags?facet=voice").then((r) => r.json()),
-      fetch("/api/tags?facet=stance").then((r) => r.json()),
     ])
-      .then(([topicData, voiceData, stanceData]) => {
+      .then(([topicData, voiceData]) => {
         setTopicTags((topicData.tags || topicData) ?? []);
         setVoiceTags((voiceData.tags || voiceData) ?? []);
-        setStanceTags((stanceData.tags || stanceData) ?? []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -64,18 +60,17 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
 
   const activeTopic = tagSlugs.find((s) => topicTags.some((t) => t.slug === s)) ?? null;
   const activeVoice = tagSlugs.find((s) => voiceTags.some((t) => t.slug === s)) ?? null;
-  const activeStance = tagSlugs.find((s) => stanceTags.some((t) => t.slug === s)) ?? null;
 
-  const activeFilterCount = [activeTopic, activeVoice, activeStance].filter(Boolean).length;
+  const activeFilterCount = [activeTopic, activeVoice].filter(Boolean).length;
 
   const updateTags = useCallback(
     (slug: string) => {
       if (controlled) {
         const current = activeTagSlugs ?? [];
-        const matchingTag = [...topicTags, ...voiceTags, ...stanceTags].find((t) => t.slug === slug);
+        const matchingTag = [...topicTags, ...voiceTags].find((t) => t.slug === slug);
         if (!matchingTag) return;
 
-        const sameFacet = [...topicTags, ...voiceTags, ...stanceTags]
+        const sameFacet = [...topicTags, ...voiceTags]
           .filter((t) => t.facet === matchingTag.facet)
           .map((t) => t.slug);
         const sameFacetSet = new Set(sameFacet);
@@ -91,10 +86,10 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
       const params = new URLSearchParams(searchParams.toString());
       const current = params.get("tags")?.split(",").filter(Boolean) ?? [];
 
-      const matchingTag = [...topicTags, ...voiceTags, ...stanceTags].find((t) => t.slug === slug);
+      const matchingTag = [...topicTags, ...voiceTags].find((t) => t.slug === slug);
       if (!matchingTag) return;
 
-      const sameFacet = [...topicTags, ...voiceTags, ...stanceTags]
+      const sameFacet = [...topicTags, ...voiceTags]
         .filter((t) => t.facet === matchingTag.facet)
         .map((t) => t.slug);
       const sameFacetSet = new Set(sameFacet);
@@ -112,14 +107,14 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
       }
       router.replace(`/?${params.toString()}`, { scroll: false });
     },
-    [controlled, activeTagSlugs, onFilterChange, searchParams, router, topicTags, voiceTags, stanceTags],
+    [controlled, activeTagSlugs, onFilterChange, searchParams, router, topicTags, voiceTags],
   );
 
   const clearFacet = useCallback(
     (facet: string) => {
       if (controlled) {
         const current = activeTagSlugs ?? [];
-        const facetSlugs = [...topicTags, ...voiceTags, ...stanceTags]
+        const facetSlugs = [...topicTags, ...voiceTags]
           .filter((t) => t.facet === facet)
           .map((t) => t.slug);
         const facetSet = new Set(facetSlugs);
@@ -128,7 +123,7 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
       }
       const params = new URLSearchParams(searchParams.toString());
       const current = params.get("tags")?.split(",").filter(Boolean) ?? [];
-      const facetSlugs = [...topicTags, ...voiceTags, ...stanceTags]
+      const facetSlugs = [...topicTags, ...voiceTags]
         .filter((t) => t.facet === facet)
         .map((t) => t.slug);
       const facetSet = new Set(facetSlugs);
@@ -140,7 +135,7 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
       }
       router.replace(`/?${params.toString()}`, { scroll: false });
     },
-    [controlled, activeTagSlugs, onFilterChange, searchParams, router, topicTags, voiceTags, stanceTags],
+    [controlled, activeTagSlugs, onFilterChange, searchParams, router, topicTags, voiceTags],
   );
 
   const clearAll = useCallback(() => {
@@ -156,17 +151,16 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
   const hasFilters = activeFilterCount > 0;
 
   useEffect(() => {
-    if (!voiceOpen && !stanceOpen && !topicsOpen) return;
+    if (!voiceOpen && !topicsOpen) return;
     function handleClick(e: MouseEvent) {
       if (filterRowRef.current && !filterRowRef.current.contains(e.target as Node)) {
         setVoiceOpen(false);
-        setStanceOpen(false);
         setTopicsOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [voiceOpen, stanceOpen, topicsOpen]);
+  }, [voiceOpen, topicsOpen]);
 
   const toggleTopicParent = (parentId: string) => {
     setExpandedTopicParents((prev) => {
@@ -249,7 +243,6 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
               onClick={() => {
                 setTopicsOpen(!topicsOpen);
                 setVoiceOpen(false);
-                setStanceOpen(false);
               }}
               className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors min-h-[44px] ${
                 activeTopic
@@ -284,7 +277,7 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
           {/* Voice dropdown */}
           <div className="relative">
             <button
-              onClick={() => { setVoiceOpen(!voiceOpen); setStanceOpen(false); setTopicsOpen(false); }}
+              onClick={() => { setVoiceOpen(!voiceOpen); setTopicsOpen(false); }}
               className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors min-h-[44px] ${
                 activeVoice ? "bg-zinc-200 text-zinc-900" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
               }`}>
@@ -313,43 +306,6 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
                 <button key={t.id} onClick={() => { updateTags(t.slug); setVoiceOpen(false); }}
                   className={`w-full px-4 py-2.5 text-left text-sm transition-colors min-h-[44px] ${
                     activeVoice === t.slug ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
-                  }`}>{t.name}</button>
-              ))}
-            </MobilePopup>
-          </div>
-
-          {/* Stance dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => { setStanceOpen(!stanceOpen); setVoiceOpen(false); setTopicsOpen(false); }}
-              className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors min-h-[44px] ${
-                activeStance ? "bg-zinc-200 text-zinc-900" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-              }`}>
-              {activeStance ? stanceTags.find((t) => t.slug === activeStance)?.name ?? "Stance" : "Stance ▾"}
-            </button>
-            {stanceOpen && (
-              <div className="hidden md:block absolute left-0 top-8 mt-1 w-44 rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl z-50 max-h-64 overflow-y-auto">
-                <button onClick={() => { clearFacet("stance"); setStanceOpen(false); }}
-                  className={`w-full px-4 py-2.5 text-left text-sm transition-colors min-h-[44px] ${
-                    !activeStance ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
-                  }`}>All</button>
-                {stanceTags.map((t) => (
-                  <button key={t.id} onClick={() => { updateTags(t.slug); setStanceOpen(false); }}
-                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors min-h-[44px] ${
-                      activeStance === t.slug ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
-                    }`}>{t.name}</button>
-                ))}
-              </div>
-            )}
-            <MobilePopup isOpen={stanceOpen} onClose={() => setStanceOpen(false)}>
-              <button onClick={() => { clearFacet("stance"); setStanceOpen(false); }}
-                className={`w-full px-4 py-2.5 text-left text-sm transition-colors min-h-[44px] ${
-                  !activeStance ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
-                }`}>All</button>
-              {stanceTags.map((t) => (
-                <button key={t.id} onClick={() => { updateTags(t.slug); setStanceOpen(false); }}
-                  className={`w-full px-4 py-2.5 text-left text-sm transition-colors min-h-[44px] ${
-                    activeStance === t.slug ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
                   }`}>{t.name}</button>
               ))}
             </MobilePopup>

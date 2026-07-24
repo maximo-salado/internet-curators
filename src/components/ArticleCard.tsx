@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 
 interface FeedItem {
@@ -12,8 +12,6 @@ interface FeedItem {
   sourceUrl: string;
   sourceId?: string;
   feedUrl?: string;
-  curatorNames: string[];
-  curatorIds: string[];
   contentSnippet: string;
   content?: string;
   image?: string;
@@ -24,47 +22,50 @@ interface FeedItem {
 
 interface ArticleCardProps {
   item: FeedItem;
+  articleId?: string;
   onRemoveSource: (sourceTitle: string) => void;
   hidden: boolean;
-  vote: number;
+  /** @deprecated — use userActions instead */
+  vote?: number;
+  /** @deprecated — curator feature removed */
   showAddSource?: boolean;
   compact?: boolean;
+  isLoggedIn?: boolean;
+  userActions?: string[];
+  showRemoveAction?: boolean;
 }
 
-export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource, compact }: ArticleCardProps) {
-  const [confirming, setConfirming] = useState<"hide" | "remove" | null>(null);
+export function ArticleCard({
+  item,
+  articleId,
+  onRemoveSource,
+  hidden,
+  vote: _vote,
+  showAddSource: _showAddSource,
+  compact,
+  isLoggedIn = false,
+  userActions = [],
+  showRemoveAction = false,
+}: ArticleCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLElement>(null);
   const router = useRouter();
-  const [adding, setAdding] = useState(false);
-  const [added, setAdded] = useState(false);
+  const pathname = usePathname();
   const [upCount, setUpCount] = useState(item.upvotes ?? 0);
   const [downCount, setDownCount] = useState(item.downvotes ?? 0);
   const [read, setRead] = useState(false);
 
-  const handleAddSource = async () => {
-    if (adding || added || !item.feedUrl) return;
-    setAdding(true);
-    try {
-      const res = await fetch("/api/sources", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          feedUrl: item.feedUrl,
-          sourceTitle: item.sourceTitle,
-          sourceUrl: item.sourceUrl,
-        }),
-      });
-      const data = await res.json();
-      if (data.added) {
-        setAdded(true);
-        window.dispatchEvent(new CustomEvent("ic:source-added", { detail: item.sourceTitle }));
-      }
-    } catch {} finally {
-      setAdding(false);
-    }
-  };
+  // Local action state for optimistic UI
+  const [localActions, setLocalActions] = useState<Set<string>>(new Set(userActions));
+  const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
+
+  // Sync localActions when userActions prop changes (e.g. after feed reload)
+  const userActionsKey = userActions.join(",");
+  useEffect(() => {
+    setLocalActions(new Set(userActions));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userActionsKey]);
 
   // Check if already read on mount
   useEffect(() => {
@@ -99,80 +100,149 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource,
     return () => document.removeEventListener("click", handleClick);
   }, [menuOpen]);
 
-  if (hidden) return null;
+  const handleAction = useCallback(
+    async (action: "upvote" | "downvote" | "save" | "dismiss") => {
+      // Auth gate: redirect to login if not logged in
+      if (!isLoggedIn) {
+        const currentUrl = pathname + (window.location.search || "");
+        router.push(`/login?next=${encodeURIComponent(currentUrl)}`);
+        return;
+      }
 
-  const curatorElements = item.curatorNames.length > 0
-    ? item.curatorNames.map((name, i) => ({ name, id: item.curatorIds[i] }))
-    : null;
+      // Already processing this action
+      if (actionLoading.has(action)) return;
+
+      const id = articleId;
+      if (!id) return; // Can't act without articleId
+
+      const currentlyActive = localActions.has(action);
+      const isVote = action === "upvote" || action === "downvote";
+
+      // Optimistic UI update
+      setActionLoading((prev) => new Set(prev).add(action));
+
+      const prevUpCount = upCount;
+      const prevDownCount = downCount;
+
+      setLocalActions((prev) => {
+        const next = new Set(prev);
+        if (currentlyActive) {
+          next.delete(action);
+        } else {
+          // For votes, remove the opposite action
+          if (action === "upvote") {
+            next.delete("downvote");
+            setUpCount((c) => (prev.has("downvote") ? c - 1 : c) + 1);
+            setDownCount((c) => (prev.has("downvote") ? c - 1 : c));
+          } else if (action === "downvote") {
+            next.delete("upvote");
+            setDownCount((c) => (prev.has("upvote") ? c - 1 : c) + 1);
+            setUpCount((c) => (prev.has("upvote") ? c - 1 : c));
+          }
+          next.add(action);
+        }
+
+        // If toggling off a vote, decrement count
+        if (isVote && currentlyActive) {
+          if (action === "upvote") setUpCount((c) => c - 1);
+          if (action === "downvote") setDownCount((c) => c - 1);
+        }
+
+        return next;
+      });
+
+      try {
+        const res = await fetch("/api/actions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ articleId: id, action, articleLink: item.link }),
+        });
+
+        if (!res.ok) {
+          // Rollback on error
+          setLocalActions((prev) => {
+            const next = new Set(prev);
+            if (currentlyActive) {
+              next.add(action);
+            } else {
+              next.delete(action);
+            }
+            return next;
+          });
+          setUpCount(prevUpCount);
+          setDownCount(prevDownCount);
+        }
+      } catch {
+        // Rollback on network error
+        setLocalActions((prev) => {
+          const next = new Set(prev);
+          if (currentlyActive) {
+            next.add(action);
+          } else {
+            next.delete(action);
+          }
+          return next;
+        });
+        setUpCount(prevUpCount);
+        setDownCount(prevDownCount);
+      } finally {
+        setActionLoading((prev) => {
+          const next = new Set(prev);
+          next.delete(action);
+          return next;
+        });
+      }
+    },
+    [isLoggedIn, articleId, actionLoading, localActions, upCount, downCount, pathname, router, item.link],
+  );
+
+  const navigateToArticle = useCallback(() => {
+    markRead();
+    if (articleId) {
+      router.push(`/article/${articleId}`);
+    } else {
+      // Fallback for items without articleId (shouldn't happen in new feed)
+      const params = new URLSearchParams({
+        title: item.title,
+        link: item.link,
+        source: item.sourceTitle,
+        date: item.pubDate,
+        upvotes: String(upCount),
+        downvotes: String(downCount),
+        ...(item.content ? { content: item.content } : { snippet: item.contentSnippet }),
+        ...(item.image ? { image: item.image } : {}),
+      });
+      router.push(`/reader?${params.toString()}`);
+    }
+  }, [articleId, item, upCount, downCount, router]);
+
+  if (hidden) return null;
 
   const hasImage = !compact && !!item.image;
 
-  const handleVote = (dir: 1 | -1) => {
-    const votes = JSON.parse(localStorage.getItem("ic:votes") ?? "{}") as Record<string, number>;
-    const prev = votes[item.link] ?? 0;
-    const next = prev === dir ? 0 : dir;
-    votes[item.link] = next;
-    localStorage.setItem("ic:votes", JSON.stringify(votes));
-    window.dispatchEvent(new Event("ic:votes-updated"));
+  // --- Helper to render action button ---
+  const isActive = (action: string) => localActions.has(action);
+  const isLoading = (action: string) => actionLoading.has(action);
 
-    if (prev === 1) setUpCount((c) => c - 1);
-    if (prev === -1) setDownCount((c) => c - 1);
-    if (next === 1) setUpCount((c) => c + 1);
-    if (next === -1) setDownCount((c) => c + 1);
-
-    fetch("/api/votes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ link: item.link, prev, next }),
-    }).catch(() => {});
-  };
-
-  const handleHide = () => {
-    const hidden = JSON.parse(localStorage.getItem("ic:hidden") ?? "[]") as string[];
-    if (!hidden.includes(item.link)) hidden.push(item.link);
-    localStorage.setItem("ic:hidden", JSON.stringify(hidden));
-    window.dispatchEvent(new Event("ic:hidden-updated"));
-    setConfirming(null);
-  };
-
-  const handleRemoveSource = () => {
-    onRemoveSource(item.sourceTitle);
-    setConfirming(null);
-  };
-
-  // Compact variant — editorial, no container
+  // --- Compact variant ---
   if (compact) {
     return (
       <article ref={cardRef} className="pb-2 border-b border-zinc-800 last:border-b-0">
         <div className="flex items-start gap-1.5">
           {read && (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" strokeWidth="2.5" className="mt-0.5 shrink-0">
-              <path d="M20 6L9 17l-5-5"/>
+              <path d="M20 6L9 17l-5-5" />
             </svg>
           )}
           <div className="min-w-0 flex-1">
             <button
-              onClick={() => {
-                markRead();
-                const params = new URLSearchParams({
-                  title: item.title,
-                  link: item.link,
-                  source: item.sourceTitle,
-                  date: item.pubDate,
-                  upvotes: String(upCount),
-                  downvotes: String(downCount),
-                  ...(item.content ? { content: item.content } : { snippet: item.contentSnippet }),
-                  ...(item.image ? { image: item.image } : {}),
-                });
-                router.push(`/reader?${params.toString()}`);
-              }}
+              onClick={navigateToArticle}
               className="block text-left w-full"
             >
               <h3 className="text-sm font-medium text-zinc-100 leading-snug truncate">{item.title}</h3>
             </button>
             <p className="mt-0.5 text-xs text-zinc-500 truncate">
               {item.sourceTitle}
-              {item.curatorNames.length > 0 && ` · via ${item.curatorNames[0]}`}
             </p>
           </div>
         </div>
@@ -180,16 +250,17 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource,
     );
   }
 
-  // Full variant — editorial layout
+  // --- Full variant ---
   return (
-    <article ref={cardRef} className="pb-4 border-b border-zinc-800 last:border-b-0 relative">
-      {/* Image — full width, no overlay, sharp edges */}
+    <article ref={cardRef} className="pb-11 border-b border-zinc-800 last:border-b-0 relative">
+      {/* Image — full width */}
       {hasImage && (
         <img
           src={item.image!}
           alt=""
-          className="w-full max-h-64 object-cover"
+          className="w-full h-auto cursor-pointer"
           loading="lazy"
+          onClick={navigateToArticle}
         />
       )}
 
@@ -239,24 +310,11 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource,
         <div className="flex items-start gap-1.5 mt-2">
           {read && (
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2.5" className="mt-[3px] shrink-0">
-              <path d="M20 6L9 17l-5-5"/>
+              <path d="M20 6L9 17l-5-5" />
             </svg>
           )}
           <button
-            onClick={() => {
-              markRead();
-              const params = new URLSearchParams({
-                title: item.title,
-                link: item.link,
-                source: item.sourceTitle,
-                date: item.pubDate,
-                upvotes: String(upCount),
-                downvotes: String(downCount),
-                ...(item.content ? { content: item.content } : { snippet: item.contentSnippet }),
-                ...(item.image ? { image: item.image } : {}),
-              });
-              router.push(`/reader?${params.toString()}`);
-            }}
+            onClick={navigateToArticle}
             className="block text-left w-full"
           >
             <h2 className="font-semibold leading-snug text-zinc-100">
@@ -272,89 +330,128 @@ export function ArticleCard({ item, onRemoveSource, hidden, vote, showAddSource,
           </p>
         )}
 
-        {/* Curator line + date */}
+        {/* Date */}
         <p className="mt-2 text-xs text-zinc-600">
-          {curatorElements ? (
-            <>
-              via{" "}
-              {curatorElements.map((c, i) => (
-                <span key={c.id}>
-                  <Link
-                    href={`/curator/${c.id}`}
-                    className="underline-offset-2 hover:underline text-zinc-400"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {c.name}
-                  </Link>
-                  {i < curatorElements.length - 1 && ", "}
-                </span>
-              ))}
-            </>
-          ) : (
-            "Trending"
-          )}{" "}
-          · {new Date(item.pubDate).toLocaleDateString()}
+          {new Date(item.pubDate).toLocaleDateString()}
         </p>
       </div>
 
-      {/* Actions row — below text, subtle */}
+      {/* Actions row — auth-gated API actions */}
       <div className="flex items-center justify-around mt-3 pt-2 border-t border-zinc-800/60">
-        {showAddSource && (
-          <button
-            onClick={handleAddSource}
-            disabled={adding || added}
-            className={`flex items-center gap-1 py-1 px-3 rounded-lg transition-colors active:scale-95 ${
-              added ? "text-green-400" : "text-zinc-400 hover:bg-zinc-800/50"
-            }`}
+        {/* Upvote */}
+        <button
+          onClick={() => handleAction("upvote")}
+          disabled={isLoading("upvote")}
+          className={`flex items-center gap-1 py-1 px-3 rounded-lg transition-colors active:scale-95 ${
+            isActive("upvote")
+              ? "text-green-400"
+              : "text-zinc-400 hover:bg-zinc-800/50"
+          }`}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill={isActive("upvote") ? "#4ade80" : "none"}
+            stroke="currentColor"
+            strokeWidth="2"
           >
-            {added ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
-            )}
-            <span className="text-xs font-medium">{added ? "Added" : "Save"}</span>
-          </button>
-        )}
-        <button onClick={() => handleVote(1)} className={`flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 ${vote === 1 ? "text-green-400" : "text-zinc-400"}`}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill={vote === 1 ? "#4ade80" : "none"} stroke="currentColor" strokeWidth="2"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>
+            <path d="M12 4l-8 8h5v8h6v-8h5z" />
+          </svg>
           <span className="text-xs font-medium">{upCount}</span>
         </button>
-        <button onClick={() => handleVote(-1)} className={`flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 ${vote === -1 ? "text-red-400" : "text-zinc-400"}`}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill={vote === -1 ? "#f87171" : "none"} stroke="currentColor" strokeWidth="2"><path d="M12 20l8-8h-5V4H9v8H4z"/></svg>
+
+        {/* Downvote */}
+        <button
+          onClick={() => handleAction("downvote")}
+          disabled={isLoading("downvote")}
+          className={`flex items-center gap-1 py-1 px-3 rounded-lg transition-colors active:scale-95 ${
+            isActive("downvote")
+              ? "text-red-400"
+              : "text-zinc-400 hover:bg-zinc-800/50"
+          }`}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill={isActive("downvote") ? "#f87171" : "none"}
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M12 20l8-8h-5V4H9v8H4z" />
+          </svg>
           <span className="text-xs font-medium">{downCount}</span>
         </button>
-        <button onClick={() => navigator.clipboard.writeText(item.link)} className="flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 text-zinc-400">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
-        </button>
-        <div ref={menuRef} className="relative">
-          <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 text-zinc-400">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-          </button>
-          {menuOpen && (
-            <div className="absolute bottom-full right-0 mb-2 w-36 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-50">
-              <button onClick={() => { setConfirming("hide"); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-sm text-zinc-300 hover:bg-zinc-700 rounded-t-lg transition-colors">Hide</button>
-              <button onClick={() => { setConfirming("remove"); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-zinc-700 rounded-b-lg transition-colors">Remove source</button>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Confirmation overlay */}
-      {confirming && (
-        <div className="absolute inset-x-0 bottom-0 z-10 border-t border-zinc-700 bg-zinc-900 p-3">
-          <p className="text-xs text-zinc-300 mb-2">
-            {confirming === "hide" ? "Hide this article?" : `Stop seeing ${item.sourceTitle}?`}
-          </p>
-          <div className="flex gap-2">
-            <button onClick={confirming === "hide" ? handleHide : handleRemoveSource} className="rounded bg-red-600 px-3 py-1 text-xs text-white hover:bg-red-500">
-              Yes, {confirming === "hide" ? "hide" : "remove"}
-            </button>
-            <button onClick={() => setConfirming(null)} className="rounded bg-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-600">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+        {/* Save */}
+        <button
+          onClick={() => handleAction("save")}
+          disabled={isLoading("save")}
+          className={`flex items-center gap-1 py-1 px-3 rounded-lg transition-colors active:scale-95 ${
+            isActive("save")
+              ? "text-yellow-400"
+              : "text-zinc-400 hover:bg-zinc-800/50"
+          }`}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill={isActive("save") ? "#facc15" : "none"}
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
+          </svg>
+          <span className="text-xs font-medium">
+            {isActive("save") ? (showRemoveAction ? "Remove" : "Saved") : "Save"}
+          </span>
+        </button>
+
+        {/* Dismiss */}
+        <button
+          onClick={() => handleAction("dismiss")}
+          disabled={isLoading("dismiss")}
+          className={`flex items-center gap-1 py-1 px-3 rounded-lg transition-colors active:scale-95 ${
+            isActive("dismiss")
+              ? "text-zinc-200"
+              : "text-zinc-400 hover:bg-zinc-800/50"
+          }`}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill={isActive("dismiss") ? "currentColor" : "none"}
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+          <span className="text-xs font-medium">
+            {isActive("dismiss") ? "Hidden" : "Hide"}
+          </span>
+        </button>
+
+        {/* Share / Copy link */}
+        <button
+          onClick={() => navigator.clipboard.writeText(item.link)}
+          className="flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 text-zinc-400"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+          </svg>
+        </button>
+      </div>
     </article>
   );
 }
