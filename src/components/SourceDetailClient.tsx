@@ -141,8 +141,6 @@ export function SourceDetailClient({
                   sourceTitle: source.title,
                   sourceUrl: source.site_url ?? "",
                   sourceId: article.source_id,
-                  curatorNames: [],
-                  curatorIds: [],
                   contentSnippet: article.content_snippet ?? "",
                   image: article.image ?? undefined,
                   upvotes: article.upvotes,
