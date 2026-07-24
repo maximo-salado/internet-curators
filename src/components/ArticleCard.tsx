@@ -55,6 +55,7 @@ export function ArticleCard({
   const [upCount, setUpCount] = useState(item.upvotes ?? 0);
   const [downCount, setDownCount] = useState(item.downvotes ?? 0);
   const [read, setRead] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   // Local action state for optimistic UI
   const [localActions, setLocalActions] = useState<Set<string>>(new Set(userActions));
@@ -218,7 +219,7 @@ export function ArticleCard({
 
   if (hidden) return null;
 
-  const hasImage = !compact && !!item.image;
+  const hasImage = !compact && !!item.image && !imageError;
 
   // --- Helper to render action button ---
   const isActive = (action: string) => localActions.has(action);
@@ -260,6 +261,7 @@ export function ArticleCard({
           alt=""
           className="w-full h-auto cursor-pointer"
           loading="lazy"
+          onError={() => setImageError(true)}
           onClick={navigateToArticle}
         />
       )}
