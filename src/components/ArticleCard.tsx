@@ -55,7 +55,10 @@ export function ArticleCard({
   const [upCount, setUpCount] = useState(item.upvotes ?? 0);
   const [downCount, setDownCount] = useState(item.downvotes ?? 0);
   const [read, setRead] = useState(false);
-  const [imageError, setImageError] = useState(false);
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    (e.target as HTMLImageElement).style.display = "none";
+  };
 
   // Local action state for optimistic UI
   const [localActions, setLocalActions] = useState<Set<string>>(new Set(userActions));
@@ -219,7 +222,7 @@ export function ArticleCard({
 
   if (hidden) return null;
 
-  const hasImage = !compact && !!item.image && !imageError;
+  const hasImage = !compact && !!item.image;
 
   // --- Helper to render action button ---
   const isActive = (action: string) => localActions.has(action);
@@ -261,7 +264,7 @@ export function ArticleCard({
           alt=""
           className="w-full h-auto cursor-pointer"
           loading="lazy"
-          onError={() => setImageError(true)}
+          onError={handleImageError}
           onClick={navigateToArticle}
         />
       )}
