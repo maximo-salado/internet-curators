@@ -42,6 +42,8 @@ export default function AdminPage() {
   const [sourcesLoading, setSourcesLoading] = useState(true);
   const [showHiddenOnly, setShowHiddenOnly] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
+  const [blacklistOnDelete, setBlacklistOnDelete] = useState(false);
 
   // Tags state
   const [tags, setTags] = useState<AdminTag[]>([]);
@@ -107,6 +109,26 @@ export default function AdminPage() {
       setError(e.message);
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const deleteSource = async (source: AdminSource) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/sources/${source.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blacklist: blacklistOnDelete }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Delete failed");
+      }
+      setDeletingSourceId(null);
+      setBlacklistOnDelete(false);
+      await fetchSources();
+    } catch (e: any) {
+      setError(e.message);
     }
   };
 
@@ -259,7 +281,7 @@ export default function AdminPage() {
                     <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Site</th>
                     <th className="px-4 py-3 text-center font-medium">Articles</th>
                     <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Last fetched</th>
-                    <th className="px-4 py-3 text-center font-medium">Status</th>
+                    <th className="px-4 py-3 text-right font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
@@ -286,18 +308,57 @@ export default function AdminPage() {
                           ? new Date(s.last_fetched_at).toLocaleDateString()
                           : "—"}
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => toggleHidden(s)}
-                          disabled={togglingId === s.id}
-                          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                            s.hidden
-                              ? "bg-red-900/40 text-red-300 border border-red-800 hover:bg-red-900/60"
-                              : "bg-emerald-900/30 text-emerald-300 border border-emerald-800 hover:bg-emerald-900/50"
-                          } disabled:opacity-50`}
-                        >
-                          {togglingId === s.id ? "…" : s.hidden ? "Show" : "Hide"}
-                        </button>
+                      <td className="px-4 py-3 text-right">
+                        {deletingSourceId === s.id ? (
+                          <div className="flex flex-col items-end gap-2">
+                            <span className="text-xs text-red-400">
+                              Delete &quot;{s.title}&quot; and {count(s.articles)} articles?
+                            </span>
+                            <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={blacklistOnDelete}
+                                onChange={(e) => setBlacklistOnDelete(e.target.checked)}
+                                className="accent-red-500"
+                              />
+                              Blacklist feed URL
+                            </label>
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => deleteSource(s)}
+                                className="rounded bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-500 transition-colors"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                onClick={() => { setDeletingSourceId(null); setBlacklistOnDelete(false); }}
+                                className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => toggleHidden(s)}
+                              disabled={togglingId === s.id}
+                              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                                s.hidden
+                                  ? "bg-red-900/40 text-red-300 border border-red-800 hover:bg-red-900/60"
+                                  : "bg-emerald-900/30 text-emerald-300 border border-emerald-800 hover:bg-emerald-900/50"
+                              } disabled:opacity-50`}
+                            >
+                              {togglingId === s.id ? "…" : s.hidden ? "Show" : "Hide"}
+                            </button>
+                            <button
+                              onClick={() => setDeletingSourceId(s.id)}
+                              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-red-400 hover:border-red-800 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}

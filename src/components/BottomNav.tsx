@@ -70,31 +70,6 @@ export function BottomNav() {
             Saved
           </span>
         </button>
-
-        {/* Search — magnifying glass icon */}
-        <button
-          onClick={() => router.push("/search", { scroll: false })}
-          className="flex flex-col items-center gap-0.5 min-h-[44px] min-w-[80px] justify-center"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={isActive("/search") ? "#f4f4f5" : "#71717a"}
-            strokeWidth="1.5"
-          >
-            <circle cx="10.5" cy="10.5" r="6.5" />
-            <path d="M15.5 15.5L21 21" />
-          </svg>
-          <span
-            className={`text-[10px] leading-none ${
-              isActive("/search") ? "text-zinc-100" : "text-zinc-500"
-            }`}
-          >
-            Search
-          </span>
-        </button>
       </div>
     </nav>
   );

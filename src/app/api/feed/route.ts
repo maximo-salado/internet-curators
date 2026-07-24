@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { refreshStaleSources } from "@/lib/feed-refresher";
 import { NextResponse } from "next/server";
 
@@ -278,7 +279,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ refreshed: 0 });
   }
 
-  await refreshStaleSources(sources);
+  // Filter out blacklisted feed URLs (use service client since RLS blocks user reads)
+  const serviceClient = createServiceClient();
+  const { data: blacklisted } = await serviceClient
+    .from("blacklisted_feeds")
+    .select("feed_url");
+
+  const blacklistedUrls = new Set((blacklisted ?? []).map((b: any) => b.feed_url));
+  const toRefresh = sources.filter((s) => !blacklistedUrls.has(s.feed_url));
+
+  await refreshStaleSources(toRefresh);
 
   return NextResponse.json({ refreshed: sources.length });
 }
