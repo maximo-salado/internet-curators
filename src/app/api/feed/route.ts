@@ -49,10 +49,11 @@ export async function GET(req: Request) {
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20));
   const tagSlugs = searchParams.get("tags")?.split(",").filter(Boolean) ?? [];
 
-  // 1. Get all sources
+  // 1. Get all visible sources
   const { data: sources } = await supabase
     .from("sources")
-    .select("id, feed_url, title, site_url");
+    .select("id, feed_url, title, site_url")
+    .eq("hidden", false);
 
   if (!sources?.length) return NextResponse.json({ items: [], total: 0, hasMore: false });
 
@@ -270,7 +271,8 @@ export async function POST(req: Request) {
 
   const { data: sources, error } = await supabase
     .from("sources")
-    .select("id, feed_url, last_fetched_at");
+    .select("id, feed_url, last_fetched_at")
+    .eq("hidden", false);
 
   if (error || !sources?.length) {
     return NextResponse.json({ refreshed: 0 });
