@@ -72,7 +72,6 @@ export default async function ArticlePage({
     : "";
 
   const hasContent = !!article.content;
-  const hasImage = !!article.image;
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 sm:px-6 pb-20">
@@ -161,15 +160,6 @@ export default async function ArticlePage({
       {/* Publication date */}
       {pubDate && (
         <p className="text-sm text-zinc-500 mb-6">{pubDate}</p>
-      )}
-
-      {/* Image */}
-      {hasImage && (
-        <img
-          src={article.image!}
-          alt=""
-          className="w-full max-h-96 object-cover rounded-lg mb-6"
-        />
       )}
 
       {/* Content */}
