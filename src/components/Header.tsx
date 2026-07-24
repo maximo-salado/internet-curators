@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
@@ -16,14 +16,10 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(initialUser);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [expanded, setExpanded] = useState(true);
-  const expandedForSessionRef = useRef(false);
-  const [visible, setVisible] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(true);
   const lastScrollRef = useRef(0);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const observerTargetRef = useRef<HTMLDivElement>(null);
-  const scrollStartedRef = useRef(false);
 
   const isHome = pathname === "/";
 
@@ -32,8 +28,10 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUser(data.user);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => setUser(session?.user ?? null)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) =>
+      setUser(session?.user ?? null),
     );
     return () => subscription.unsubscribe();
   }, []);
@@ -41,20 +39,14 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
   useEffect(() => {
     if (!menuOpen) return;
     function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node))
+        setMenuOpen(false);
     }
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, [menuOpen]);
 
   const hasPending = editorPendingCount > 0;
-
-  const tabParam = pathname === "/" ? "" : "";
-  const tab = pathname === "/" ? (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") ?? "discover" : "discover") : "";
-
-  const navigateTab = useCallback((t: string) => {
-    router.push(`/?tab=${t}`, { scroll: false });
-  }, [router]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -65,7 +57,6 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
       }
       if (current > lastScrollRef.current) {
         setVisible(false);
-        scrollStartedRef.current = true;
       } else {
         setVisible(true);
       }
@@ -75,11 +66,6 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
       hideTimerRef.current = setTimeout(() => {
         setVisible(true);
       }, 300);
-
-      if (current > 50 && !expandedForSessionRef.current) {
-        setExpanded(false);
-        expandedForSessionRef.current = true;
-      }
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -88,6 +74,10 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     };
   }, []);
+
+  // On the home page, hide the fixed header only when anonymous (hero section has its own)
+  // Logged-in users on home get the header with profile menu
+  if (isHome && !user) return null;
 
   return (
     <>
@@ -98,7 +88,10 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
       >
         {/* Mobile header */}
         <div className="flex items-center justify-between px-4 py-3 md:hidden">
-          <Link href="/" className="text-base font-semibold tracking-tight">
+          <Link
+            href="/"
+            className="text-base font-semibold tracking-tight"
+          >
             Internet Curators
           </Link>
           <div className="flex items-center gap-2">
@@ -115,14 +108,19 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
                     <span className="absolute top-0 right-0 w-2 h-2 bg-orange-500 rounded-full" />
                   )}
                 </button>
-                {menuOpen && <MenuDropdown user={user} hasPending={hasPending} pendingCount={editorPendingCount} onClose={() => setMenuOpen(false)} />}
+                {menuOpen && (
+                  <MenuDropdown
+                    user={user}
+                    onClose={() => setMenuOpen(false)}
+                  />
+                )}
               </div>
             ) : (
               <Link
-                href="/login"
+                href={`/login?next=${encodeURIComponent(pathname)}`}
                 className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
               >
-                Sign in
+                Sign In
               </Link>
             )}
           </div>
@@ -130,33 +128,13 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
 
         {/* Desktop header */}
         <nav className="hidden md:flex items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-8">
-            <Link href="/" className="text-base font-semibold tracking-tight">
-              Internet Curators
-            </Link>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => navigateTab("discover")}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  tab === "discover" || (!tab && pathname === "/")
-                    ? "text-zinc-100 underline underline-offset-[12px] decoration-2 decoration-zinc-400"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                Discover
-              </button>
-              <button
-                onClick={() => navigateTab("my-feed")}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  tab === "my-feed"
-                    ? "text-zinc-100 underline underline-offset-[12px] decoration-2 decoration-zinc-400"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                My Feed
-              </button>
-            </div>
-          </div>
+          <Link
+            href="/"
+            className="text-base font-semibold tracking-tight"
+          >
+            Internet Curators
+          </Link>
+
           <div className="flex items-center gap-2">
             {user ? (
               <div ref={menuRef} className="relative">
@@ -171,79 +149,41 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
                     <span className="absolute top-0 right-0 w-2 h-2 bg-orange-500 rounded-full" />
                   )}
                 </button>
-                {menuOpen && <MenuDropdown user={user} hasPending={hasPending} pendingCount={editorPendingCount} onClose={() => setMenuOpen(false)} />}
+                {menuOpen && (
+                  <MenuDropdown
+                    user={user}
+                    onClose={() => setMenuOpen(false)}
+                  />
+                )}
               </div>
             ) : (
               <Link
-                href="/login"
+                href={`/login?next=${encodeURIComponent(pathname)}`}
                 className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
               >
-                Sign in
+                Sign In
               </Link>
             )}
           </div>
         </nav>
       </header>
-      <div className={`md:h-[49px] ${!user && expanded ? "h-[88px]" : "h-[57px]"}`} />
+      <div className="h-[49px]" />
     </>
   );
 }
 
 function MenuDropdown({
   user,
-  hasPending,
-  pendingCount,
   onClose,
 }: {
   user: User;
-  hasPending: boolean;
-  pendingCount: number;
   onClose: () => void;
 }) {
-  const [isEditor, setIsEditor] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/discover/sources?status=pending&limit=1")
-      .then((r) => r.json())
-      .then((data) => { if (data.isEditor) setIsEditor(true); })
-      .catch(() => {});
-  }, []);
-
   return (
     <div className="absolute right-0 top-10 w-52 rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl z-50">
       <div className="px-4 py-2.5 border-b border-zinc-800">
         <p className="text-sm text-zinc-300 truncate">{user.email}</p>
       </div>
-      {isEditor && (
-        <Link
-          href="/review-queue"
-          onClick={onClose}
-          className="flex items-center justify-between px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
-        >
-          <span>Review Queue</span>
-          {hasPending && (
-            <span className="rounded-full bg-orange-500/20 px-2 py-0.5 text-xs text-orange-400">
-              {pendingCount}
-            </span>
-          )}
-        </Link>
-      )}
-      <Link
-        href="/dashboard"
-        onClick={onClose}
-        className="block px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
-      >
-        My Collections
-      </Link>
-      {isEditor && (
-        <Link
-          href="/tag-health"
-          onClick={onClose}
-          className="block px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
-        >
-          Tag Health
-        </Link>
-      )}
       <Link
         href="/profile"
         onClick={onClose}

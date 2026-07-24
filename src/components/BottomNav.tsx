@@ -1,52 +1,97 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 export function BottomNav() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const pathname = usePathname();
-  const currentTab = searchParams.get("tab") ?? "discover";
 
-  if (pathname !== "/" && pathname !== "/search") return null;
+  // Show on: /, /saved, /article/[id]
+  const visible =
+    pathname === "/" ||
+    pathname === "/saved" ||
+    pathname.startsWith("/article/");
+
+  if (!visible) return null;
+
+  const isActive = (route: string) => {
+    if (route === "/") return pathname === "/";
+    return pathname === route;
+  };
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-800 bg-black/95 backdrop-blur safe-bottom md:hidden">
       <div className="mx-auto flex max-w-lg items-center justify-around h-14">
+        {/* Browse — globe icon */}
         <button
-          onClick={() => router.push("/?tab=discover", { scroll: false })}
+          onClick={() => router.push("/", { scroll: false })}
           className="flex flex-col items-center gap-0.5 min-h-[44px] min-w-[80px] justify-center"
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={currentTab === "discover" ? "#f4f4f5" : "#71717a"} strokeWidth="1.5">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M12 2a14 14 0 010 20M12 2a14 14 0 000 20M2 12h20"/>
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={isActive("/") ? "#f4f4f5" : "#71717a"}
+            strokeWidth="1.5"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 2a14 14 0 010 20M12 2a14 14 0 000 20M2 12h20" />
           </svg>
-          <span className={`text-[10px] leading-none ${currentTab === "discover" ? "text-zinc-100" : "text-zinc-500"}`}>
-            Discover
+          <span
+            className={`text-[10px] leading-none ${
+              isActive("/") ? "text-zinc-100" : "text-zinc-500"
+            }`}
+          >
+            Browse
           </span>
         </button>
 
+        {/* Saved — bookmark icon */}
         <button
-          onClick={() => router.push("/?tab=my-feed", { scroll: false })}
+          onClick={() => router.push("/saved", { scroll: false })}
           className="flex flex-col items-center gap-0.5 min-h-[44px] min-w-[80px] justify-center"
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={currentTab === "my-feed" ? "#f4f4f5" : "#71717a"} strokeWidth="1.5">
-            <circle cx="6" cy="18" r="2"/><path d="M4 12a8 8 0 018 8"/><path d="M4 6a14 14 0 0114 14"/>
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill={isActive("/saved") ? "#f4f4f5" : "none"}
+            stroke={isActive("/saved") ? "#f4f4f5" : "#71717a"}
+            strokeWidth="1.5"
+          >
+            <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" />
           </svg>
-          <span className={`text-[10px] leading-none ${currentTab === "my-feed" ? "text-zinc-100" : "text-zinc-500"}`}>
-            My Feed
+          <span
+            className={`text-[10px] leading-none ${
+              isActive("/saved") ? "text-zinc-100" : "text-zinc-500"
+            }`}
+          >
+            Saved
           </span>
         </button>
 
+        {/* Search — magnifying glass icon */}
         <button
-          onClick={() => router.push("/search")}
+          onClick={() => router.push("/search", { scroll: false })}
           className="flex flex-col items-center gap-0.5 min-h-[44px] min-w-[80px] justify-center"
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={pathname === "/search" ? "#f4f4f5" : "#71717a"} strokeWidth="1.5">
-            <circle cx="11" cy="11" r="7"/>
-            <path d="M21 21l-4.35-4.35"/>
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={isActive("/search") ? "#f4f4f5" : "#71717a"}
+            strokeWidth="1.5"
+          >
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <path d="M15.5 15.5L21 21" />
           </svg>
-          <span className={`text-[10px] leading-none ${pathname === "/search" ? "text-zinc-100" : "text-zinc-500"}`}>
+          <span
+            className={`text-[10px] leading-none ${
+              isActive("/search") ? "text-zinc-100" : "text-zinc-500"
+            }`}
+          >
             Search
           </span>
         </button>
