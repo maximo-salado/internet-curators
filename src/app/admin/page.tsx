@@ -259,7 +259,7 @@ export default function AdminPage() {
                     <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Site</th>
                     <th className="px-4 py-3 text-center font-medium">Articles</th>
                     <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Last fetched</th>
-                    <th className="px-4 py-3 text-center font-medium">Hidden</th>
+                    <th className="px-4 py-3 text-center font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
@@ -296,7 +296,7 @@ export default function AdminPage() {
                               : "bg-emerald-900/30 text-emerald-300 border border-emerald-800 hover:bg-emerald-900/50"
                           } disabled:opacity-50`}
                         >
-                          {togglingId === s.id ? "…" : s.hidden ? "Hidden" : "Visible"}
+                          {togglingId === s.id ? "…" : s.hidden ? "Show" : "Hide"}
                         </button>
                       </td>
                     </tr>
