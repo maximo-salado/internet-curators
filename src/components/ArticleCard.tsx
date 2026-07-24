@@ -55,6 +55,7 @@ export function ArticleCard({
   const [upCount, setUpCount] = useState(item.upvotes ?? 0);
   const [downCount, setDownCount] = useState(item.downvotes ?? 0);
   const [read, setRead] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     (e.target as HTMLImageElement).style.display = "none";
@@ -442,7 +443,11 @@ export function ArticleCard({
 
         {/* Share / Copy link */}
         <button
-          onClick={() => navigator.clipboard.writeText(item.link)}
+          onClick={() => {
+            navigator.clipboard.writeText(item.link);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
           className="flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 text-zinc-400"
         >
           <svg
@@ -457,6 +462,13 @@ export function ArticleCard({
           </svg>
         </button>
       </div>
+
+      {/* Copy toast */}
+      {copied && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full bg-zinc-700 px-4 py-1.5 text-xs text-zinc-200 shadow-lg animate-in fade-in slide-in-from-bottom-2">
+          Link copied
+        </div>
+      )}
     </article>
   );
 }
