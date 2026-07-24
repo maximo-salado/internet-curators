@@ -55,10 +55,17 @@ export function ArticleCard({
   const [upCount, setUpCount] = useState(item.upvotes ?? 0);
   const [downCount, setDownCount] = useState(item.downvotes ?? 0);
   const [read, setRead] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     (e.target as HTMLImageElement).style.display = "none";
+  };
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.target as HTMLImageElement;
+    // If image loaded but is effectively invisible (1px, etc), hide it
+    if (img.naturalWidth < 10 || img.naturalHeight < 10) {
+      img.style.display = "none";
+    }
   };
 
   // Local action state for optimistic UI
@@ -266,6 +273,7 @@ export function ArticleCard({
           className="w-full h-auto cursor-pointer"
           loading="lazy"
           onError={handleImageError}
+          onLoad={handleImageLoad}
           onClick={navigateToArticle}
         />
       )}
@@ -440,35 +448,7 @@ export function ArticleCard({
             {isActive("dismiss") ? "Hidden" : "Hide"}
           </span>
         </button>
-
-        {/* Share / Copy link */}
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(item.link);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-          }}
-          className="flex items-center gap-1 py-1 px-3 rounded-lg hover:bg-zinc-800/50 transition-colors active:scale-95 text-zinc-400"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
-          </svg>
-        </button>
       </div>
-
-      {/* Copy toast */}
-      {copied && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full bg-zinc-700 px-4 py-1.5 text-xs text-zinc-200 shadow-lg animate-in fade-in slide-in-from-bottom-2">
-          Link copied
-        </div>
-      )}
     </article>
   );
 }
