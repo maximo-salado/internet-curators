@@ -1,18 +1,41 @@
 # Internet Curators — Project Log
 
-## 2026-07-23 — Trust Signals + Tag System Refactor + Review UX
+## 2026-07-24 — Discovery Pivot: Editorial → User-Signal Curation
 
-Agent stack: Hermes (orchestration), OpenCode Go (code), Claude Sonnet (review)
-PRs: #TBD
-Issues: #99-#109
+Agent stack: Hermes (orchestration), Claude Sonnet (plans), OpenCode Go (code)
+PRs: #121, #123, #124, #125, #127, #128, #129, #130, #131, #132, #133
+Issues closed: #85-#92, #99-#104, #108-#109, #112-#120, #126
 
 ### What was built
 
-**Backend: Trust signal detection**
-- `src/lib/trust-signals.ts` — fetches homepage HTML, detects 7 trust badges via regex (C2PA, Trust Project, JTI, IFCN, CC, Not by AI, IndieWeb)
-- SSRF-safe with private IP blocking, 8s timeout, 2MB body cap
-- Detects platform (12 values) and no-trackers status
-- Returns tag slugs for unified taxonomy
+**Discovery Pivot (PR #121)**
+- Removed editorial pipeline: review-queue, review, reader routes + ReviewSection, ReviewDetailClient
+- New landing page: hero for anonymous, feed for logged-in
+- BottomNav: Browse + Saved tabs
+- ArticleCard: auth-gated API actions (upvote/downvote/save/dismiss), optimistic UI
+- Article reader: /article/[id] with fixed action bar
+- Saved feed: /saved with pagination
+- TopSources: horizontal scroll section in feed
+- Source detail: clean redesign
+- Feed API: removed curator/collection gating, all sources appear
+- 267 RSS sources imported from OPML, 200+ articles indexed
+- Migrations: 018 (user_article_actions), 019 (nullable collection_id)
+
+**Admin Panel (PR #124)**
+- /admin with Sources + Tags tabs
+- Source hide/show toggle (soft pause, excludes from feed and refresh)
+- Delete source with cascade articles + optional blacklist (PR #133, migration 021)
+- Tag edit/merge/delete
+- Admin auth: email-based via ADMIN_EMAIL env var
+- Footer with removal contact link
+
+**UI Polish**
+- Broken images: hide on error or tiny placeholder detection
+- Duplicate images removed from article reader
+- Share button removed from cards
+- TopSources cards restacked vertically
+- Copy toast removed
+- Header: shows on home when logged in, menu cleaned of editorial links
 
 **Backend: Tag system refactor**
 - `discovered_source_tags` junction table (016 migration)
