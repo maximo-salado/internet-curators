@@ -10,7 +10,7 @@ export function Footer() {
         <p>
           Want your site removed?{" "}
           <a
-            href="mailto:contact@internet-curators.vercel.app"
+            href="mailto:localhost.backing312@passmail.net"
             className="text-zinc-400 underline hover:text-zinc-200 transition-colors"
           >
             Email us
