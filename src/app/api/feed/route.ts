@@ -75,8 +75,14 @@ export function interleaveBySource<T extends { sourceTitle: string }>(
 // Empty state: { issue: null, items: [] } (HTTP 200)
 
 export async function GET(req: Request) {
-  const supabase = await createClient();
   const { searchParams } = new URL(req.url);
+
+  // Vercel cron uses GET — route ?cron=1 to the refresh handler
+  if (searchParams.get("cron") === "1") {
+    return handleCronRefresh(req);
+  }
+
+  const supabase = await createClient();
   const issueParam = searchParams.get("issue");
 
   const todayUTC = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
@@ -213,12 +219,13 @@ export async function GET(req: Request) {
   });
 }
 
-// ---- POST /api/feed ----
-// Cron-triggered RSS refresh. Kept as-is from the original handler.
+// ---- POST /api/feed ---- (and GET ?cron=1)
+// Cron-triggered RSS refresh. Vercel Cron hits GET, but POST is also supported.
 
-export async function POST(req: Request) {
+async function handleCronRefresh(req: Request) {
   const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const supabase = await createClient();
@@ -246,4 +253,8 @@ export async function POST(req: Request) {
   await refreshStaleSources(toRefresh);
 
   return NextResponse.json({ refreshed: sources.length });
+}
+
+export async function POST(req: Request) {
+  return handleCronRefresh(req);
 }

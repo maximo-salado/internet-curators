@@ -225,7 +225,30 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // Reorder: delete all current positions, re-insert in new order
+    // Reorder: validate then delete all current positions, re-insert in new order.
+    // Fetch existing article IDs first to guard against data loss if insert fails.
+
+    const { data: existingRows } = await supabase
+      .from("issue_articles")
+      .select("article_id")
+      .eq("issue_id", issueId);
+
+    const existingIds = new Set(
+      (existingRows ?? []).map((r: { article_id: string }) => r.article_id)
+    );
+
+    const requestedSet = new Set(body.articleIds);
+
+    if (
+      existingIds.size !== requestedSet.size ||
+      !body.articleIds.every((id) => existingIds.has(id))
+    ) {
+      return NextResponse.json(
+        { error: "Article IDs in reorder do not match current issue articles" },
+        { status: 400 }
+      );
+    }
+
     const { error: deleteErr } = await supabase
       .from("issue_articles")
       .delete()

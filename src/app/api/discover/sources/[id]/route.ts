@@ -2,6 +2,47 @@ import { createClient } from "@/lib/supabase/server";
 import { refreshStaleSources } from "@/lib/feed-refresher";
 import { NextResponse } from "next/server";
 
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createClient();
+  const { id } = await params;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: source, error: fetchErr } = await supabase
+    .from("discovered_sources")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (fetchErr || !source) {
+    return NextResponse.json({ error: "Source not found" }, { status: 404 });
+  }
+
+  // Fetch tags
+  let tags: Array<{ id: string; slug: string; name: string; facet: string }> = [];
+  let tag_ids: string[] = [];
+  const { data: tagRows } = await supabase
+    .from("discovered_source_tags")
+    .select("tag_id, tags!inner(id, slug, name, facet)")
+    .eq("source_id", id);
+
+  if (tagRows) {
+    tags = tagRows.map((r: any) => ({
+      id: r.tags.id,
+      slug: r.tags.slug,
+      name: r.tags.name,
+      facet: r.tags.facet,
+    }));
+    tag_ids = tags.map((t) => t.id);
+  }
+
+  return NextResponse.json({ ...source, tags, tag_ids });
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
