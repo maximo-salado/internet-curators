@@ -21,12 +21,17 @@ export async function GET(req: Request) {
   }
 
   // Fetch discovered sources
-  const { data, error, count } = await supabase
+  let query = supabase
     .from("discovered_sources")
     .select("*", { count: "exact" })
-    .eq("status", status)
     .order("discovered_at", { ascending: false })
     .range(offset, offset + limit - 1);
+
+  if (status !== "all") {
+    query = query.eq("status", status);
+  }
+
+  const { data, error, count } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
