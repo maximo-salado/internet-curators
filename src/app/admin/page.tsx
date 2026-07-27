@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import Link from "next/link";
 
 // ── Types ──────────────────────────────────────────
 
@@ -82,6 +83,7 @@ export default function AdminPage() {
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
   const [mergeTargetId, setMergeTargetId] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [collapsedFacets, setCollapsedFacets] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   // Review state
@@ -91,6 +93,13 @@ export default function AdminPage() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [blacklistingId, setBlacklistingId] = useState<string | null>(null);
+  const [topicFilter, setTopicFilter] = useState<string>("");
+  const [voiceFilter, setVoiceFilter] = useState<string>("");
+  const [formatFilter, setFormatFilter] = useState<string>("");
+  const [languageFilter, setLanguageFilter] = useState<string>("");
+  const [stanceFilter, setStanceFilter] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>("");
 
   // Issue state
   const [issueLoading, setIssueLoading] = useState(false);
@@ -129,7 +138,14 @@ export default function AdminPage() {
     setReviewError(null);
     const s = status ?? reviewStatusFilter;
     try {
-      const res = await fetch(`/api/discover/sources?status=${s}&limit=50`);
+      let url = `/api/discover/sources?status=${s}&limit=50`;
+      if (topicFilter) url += `&tag=${encodeURIComponent(topicFilter)}`;
+      if (voiceFilter) url += `&tag=${encodeURIComponent(voiceFilter)}`;
+      if (formatFilter) url += `&tag=${encodeURIComponent(formatFilter)}`;
+      if (languageFilter) url += `&tag=${encodeURIComponent(languageFilter)}`;
+      if (stanceFilter) url += `&tag=${encodeURIComponent(stanceFilter)}`;
+      if (debouncedSearchQuery) url += `&search=${encodeURIComponent(debouncedSearchQuery)}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch discovered sources");
       const data = await res.json();
       setDiscoveredSources(data.items ?? []);
@@ -138,7 +154,15 @@ export default function AdminPage() {
     } finally {
       setReviewLoading(false);
     }
-  }, [reviewStatusFilter]);
+  }, [reviewStatusFilter, topicFilter, voiceFilter, formatFilter, languageFilter, stanceFilter, debouncedSearchQuery]);
+
+  // Debounce search input to avoid firing on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (tab === "sources") {
@@ -279,6 +303,57 @@ export default function AdminPage() {
       setError(e.message);
     }
   };
+
+  // ── Tag grouping (facet → collapsed sections with parent/child hierarchy) ──
+
+  const toggleFacet = useCallback((facet: string) => {
+    setCollapsedFacets((prev) => {
+      const next = new Set(prev);
+      if (next.has(facet)) next.delete(facet);
+      else next.add(facet);
+      return next;
+    });
+  }, []);
+
+  const FACET_ORDER = ["topic", "voice", "format", "language", "stance"] as const;
+
+  const groupedTags = useMemo(() => {
+    return FACET_ORDER.map((facet) => {
+      const facetTags = tags.filter((t) => t.facet === facet);
+      if (facet === "topic") {
+        // Parent → child hierarchy for topic tags
+        const parents = facetTags
+          .filter((t) => t.parent_id === null)
+          .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+        const childMap = new Map<string, AdminTag[]>();
+        for (const t of facetTags) {
+          if (t.parent_id) {
+            const arr = childMap.get(t.parent_id) ?? [];
+            arr.push(t);
+            childMap.set(t.parent_id, arr);
+          }
+        }
+        const ordered: { tag: AdminTag; isChild: boolean }[] = [];
+        for (const parent of parents) {
+          ordered.push({ tag: parent, isChild: false });
+          const children = (childMap.get(parent.id) ?? []).sort(
+            (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
+          );
+          for (const child of children) {
+            ordered.push({ tag: child, isChild: true });
+          }
+        }
+        return { facet, tags: ordered };
+      }
+      // Flat facets (voice, format, language, stance)
+      return {
+        facet,
+        tags: facetTags
+          .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+          .map((tag) => ({ tag, isChild: false })),
+      };
+    });
+  }, [tags]);
 
   // ── Issue Fetching ──────────────────────────────────
 
@@ -482,175 +557,213 @@ export default function AdminPage() {
         <div>
           {tagsLoading ? (
             <p className="text-sm text-zinc-500">Loading…</p>
+          ) : tags.length === 0 ? (
+            <p className="text-sm text-zinc-500">No tags found</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-zinc-800">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-900 text-zinc-400">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium">Name</th>
-                    <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Slug</th>
-                    <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Facet</th>
-                    <th className="px-4 py-3 text-center font-medium">Articles</th>
-                    <th className="px-4 py-3 text-right font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800">
-                  {tags.map((t) => (
-                    <tr
-                      key={t.id}
-                      className={`hover:bg-zinc-900/50 transition-colors ${
-                        mergeSourceId === t.id ? "bg-zinc-800" : ""
-                      }`}
+            <div className="space-y-4">
+              {groupedTags.map(({ facet, tags: facetTagItems }) => {
+                const isCollapsed = collapsedFacets.has(facet);
+                const capitalized = facet.charAt(0).toUpperCase() + facet.slice(1);
+                return (
+                  <div
+                    key={facet}
+                    className="rounded-lg border border-zinc-800 overflow-hidden"
+                  >
+                    {/* Collapsible header */}
+                    <button
+                      onClick={() => toggleFacet(facet)}
+                      className="w-full flex items-center gap-2 px-4 py-3 bg-zinc-900 text-left hover:bg-zinc-800/70 transition-colors"
                     >
-                      {/* Name */}
-                      <td className="px-4 py-3 text-zinc-100">
-                        {editingId === t.id ? (
-                          <input
-                            value={editForm.name}
-                            onChange={(e) =>
-                              setEditForm((f) => ({ ...f, name: e.target.value }))
-                            }
-                            className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-zinc-500"
-                          />
-                        ) : (
-                          <span className="max-w-[150px] truncate block">{t.name}</span>
-                        )}
-                      </td>
+                      <span className="text-xs text-zinc-500 transition-transform duration-150">
+                        {isCollapsed ? "▶" : "▼"}
+                      </span>
+                      <span className="text-sm font-medium text-zinc-200">
+                        {capitalized}
+                      </span>
+                      <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500">
+                        {facetTagItems.length}
+                      </span>
+                    </button>
 
-                      {/* Slug */}
-                      <td className="px-4 py-3 text-zinc-400 hidden sm:table-cell">
-                        {editingId === t.id ? (
-                          <input
-                            value={editForm.slug}
-                            onChange={(e) =>
-                              setEditForm((f) => ({ ...f, slug: e.target.value }))
-                            }
-                            className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-zinc-500"
-                          />
-                        ) : (
-                          <code className="text-xs">{t.slug}</code>
-                        )}
-                      </td>
+                    {/* Collapsible body */}
+                    {!isCollapsed && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-zinc-900/50 text-zinc-500">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-[11px] font-medium">
+                                Name
+                              </th>
+                              <th className="px-4 py-2 text-left text-[11px] font-medium hidden sm:table-cell">
+                                Slug
+                              </th>
+                              <th className="px-4 py-2 text-center text-[11px] font-medium w-20">
+                                Articles
+                              </th>
+                              <th className="px-4 py-2 text-right text-[11px] font-medium w-48">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-800/60">
+                            {facetTagItems.map(({ tag: t, isChild }) => (
+                              <tr
+                                key={t.id}
+                                className={`hover:bg-zinc-900/40 transition-colors ${
+                                  mergeSourceId === t.id ? "bg-zinc-800" : ""
+                                }`}
+                              >
+                                {/* Name */}
+                                <td
+                                  className={`px-4 py-2.5 text-zinc-100 ${
+                                    isChild ? "pl-8" : ""
+                                  }`}
+                                >
+                                  {editingId === t.id ? (
+                                    <input
+                                      value={editForm.name}
+                                      onChange={(e) =>
+                                        setEditForm((f) => ({
+                                          ...f,
+                                          name: e.target.value,
+                                        }))
+                                      }
+                                      className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+                                    />
+                                  ) : (
+                                    <span className="max-w-[150px] truncate block">
+                                      {isChild && (
+                                        <span className="text-zinc-600 mr-1.5">
+                                          ▸
+                                        </span>
+                                      )}
+                                      {t.name}
+                                    </span>
+                                  )}
+                                </td>
 
-                      {/* Facet */}
-                      <td className="px-4 py-3 text-zinc-400 hidden md:table-cell">
-                        {editingId === t.id ? (
-                          <input
-                            value={editForm.facet}
-                            onChange={(e) =>
-                              setEditForm((f) => ({ ...f, facet: e.target.value }))
-                            }
-                            className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-zinc-500"
-                          />
-                        ) : (
-                          <span className="text-xs">{t.facet}</span>
-                        )}
-                      </td>
+                                {/* Slug */}
+                                <td className="px-4 py-2.5 text-zinc-400 hidden sm:table-cell">
+                                  {editingId === t.id ? (
+                                    <input
+                                      value={editForm.slug}
+                                      onChange={(e) =>
+                                        setEditForm((f) => ({
+                                          ...f,
+                                          slug: e.target.value,
+                                        }))
+                                      }
+                                      className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+                                    />
+                                  ) : (
+                                    <code className="text-xs">{t.slug}</code>
+                                  )}
+                                </td>
 
-                      {/* Article count */}
-                      <td className="px-4 py-3 text-center text-zinc-400">
-                        {count(t.article_tags)}
-                      </td>
+                                {/* Article count */}
+                                <td className="px-4 py-2.5 text-center text-zinc-400">
+                                  {count(t.article_tags)}
+                                </td>
 
-                      {/* Actions */}
-                      <td className="px-4 py-3 text-right">
-                        {editingId === t.id ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => saveEdit(t.id)}
-                              className="rounded bg-white px-2.5 py-1 text-xs font-medium text-black hover:bg-zinc-200 transition-colors"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : mergeSourceId === t.id ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <select
-                              value={mergeTargetId}
-                              onChange={(e) => setMergeTargetId(e.target.value)}
-                              className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100 outline-none"
-                            >
-                              <option value="">Select target…</option>
-                              {tags
-                                .filter((o) => o.id !== t.id)
-                                .map((o) => (
-                                  <option key={o.id} value={o.id}>
-                                    {o.name} ({o.slug})
-                                  </option>
-                                ))}
-                            </select>
-                            <button
-                              onClick={confirmMerge}
-                              disabled={!mergeTargetId}
-                              className="rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-500 transition-colors disabled:opacity-40"
-                            >
-                              Merge
-                            </button>
-                            <button
-                              onClick={cancelMerge}
-                              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : deletingId === t.id ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <span className="text-xs text-red-400">
-                              Delete &quot;{t.name}&quot;?
-                            </span>
-                            <button
-                              onClick={() => confirmDelete(t.id)}
-                              className="rounded bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-500 transition-colors"
-                            >
-                              Yes
-                            </button>
-                            <button
-                              onClick={() => setDeletingId(null)}
-                              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-                            >
-                              No
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => startEdit(t)}
-                              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition-colors"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => startMerge(t.id)}
-                              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition-colors"
-                            >
-                              Merge
-                            </button>
-                            <button
-                              onClick={() => setDeletingId(t.id)}
-                              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-red-400 hover:border-red-800 transition-colors"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {tags.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
-                        No tags found
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                                {/* Actions */}
+                                <td className="px-4 py-2.5 text-right">
+                                  {editingId === t.id ? (
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        onClick={() => saveEdit(t.id)}
+                                        className="rounded bg-white px-2.5 py-1 text-xs font-medium text-black hover:bg-zinc-200 transition-colors"
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        onClick={cancelEdit}
+                                        className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : mergeSourceId === t.id ? (
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <select
+                                        value={mergeTargetId}
+                                        onChange={(e) =>
+                                          setMergeTargetId(e.target.value)
+                                        }
+                                        className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100 outline-none"
+                                      >
+                                        <option value="">Select target…</option>
+                                        {tags
+                                          .filter((o) => o.id !== t.id)
+                                          .map((o) => (
+                                            <option key={o.id} value={o.id}>
+                                              {o.name} ({o.slug})
+                                            </option>
+                                          ))}
+                                      </select>
+                                      <button
+                                        onClick={confirmMerge}
+                                        disabled={!mergeTargetId}
+                                        className="rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-500 transition-colors disabled:opacity-40"
+                                      >
+                                        Merge
+                                      </button>
+                                      <button
+                                        onClick={cancelMerge}
+                                        className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : deletingId === t.id ? (
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <span className="text-xs text-red-400">
+                                        Delete &quot;{t.name}&quot;?
+                                      </span>
+                                      <button
+                                        onClick={() => confirmDelete(t.id)}
+                                        className="rounded bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-500 transition-colors"
+                                      >
+                                        Yes
+                                      </button>
+                                      <button
+                                        onClick={() => setDeletingId(null)}
+                                        className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                                      >
+                                        No
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        onClick={() => startEdit(t)}
+                                        className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition-colors"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={() => startMerge(t.id)}
+                                        className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition-colors"
+                                      >
+                                        Merge
+                                      </button>
+                                      <button
+                                        onClick={() => setDeletingId(t.id)}
+                                        className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-red-400 hover:border-red-800 transition-colors"
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -682,6 +795,168 @@ export default function AdminPage() {
             ))}
           </div>
 
+          {/* Facet filters */}
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {/* Search */}
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search title, description…"
+              className="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 outline-none focus:border-zinc-500 placeholder:text-zinc-500 min-w-[180px]"
+            />
+
+            {/* Topic (hierarchical) */}
+            <select
+              value={topicFilter}
+              onChange={(e) => setTopicFilter(e.target.value)}
+              className="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 outline-none focus:border-zinc-500"
+            >
+              <option value="">All Topics</option>
+              {(() => {
+                const topicTags = tags.filter((t) => t.facet === "topic");
+                const parents = topicTags
+                  .filter((t) => t.parent_id === null)
+                  .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+                const childMap = new Map<string, AdminTag[]>();
+                for (const t of topicTags) {
+                  if (t.parent_id) {
+                    const arr = childMap.get(t.parent_id) ?? [];
+                    arr.push(t);
+                    childMap.set(t.parent_id, arr);
+                  }
+                }
+                return parents.flatMap((parent) => {
+                  const children = (childMap.get(parent.id) ?? [])
+                    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+                  return [
+                    <option key={parent.slug} value={parent.slug} style={{ fontWeight: 700 }}>
+                      {parent.name}
+                    </option>,
+                    ...children.map((child) => (
+                      <option key={child.slug} value={child.slug}>
+                        {"    ▸ "}{child.name}
+                      </option>
+                    )),
+                  ];
+                });
+              })()}
+            </select>
+
+            {/* Voice (flat) */}
+            <select
+              value={voiceFilter}
+              onChange={(e) => setVoiceFilter(e.target.value)}
+              className="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 outline-none focus:border-zinc-500"
+            >
+              <option value="">All Voices</option>
+              {(() => {
+                const seen = new Set<string>();
+                return tags
+                  .filter((t) => t.facet === "voice")
+                  .filter((t) => {
+                    if (seen.has(t.name)) return false;
+                    seen.add(t.name);
+                    return true;
+                  })
+                  .map((t) => (
+                    <option key={t.slug} value={t.slug}>
+                      {t.name}
+                    </option>
+                  ));
+              })()}
+            </select>
+
+            {/* Format (flat) */}
+            <select
+              value={formatFilter}
+              onChange={(e) => setFormatFilter(e.target.value)}
+              className="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 outline-none focus:border-zinc-500"
+            >
+              <option value="">All Formats</option>
+              {(() => {
+                const seen = new Set<string>();
+                return tags
+                  .filter((t) => t.facet === "format")
+                  .filter((t) => {
+                    if (seen.has(t.name)) return false;
+                    seen.add(t.name);
+                    return true;
+                  })
+                  .map((t) => (
+                    <option key={t.slug} value={t.slug}>
+                      {t.name}
+                    </option>
+                  ));
+              })()}
+            </select>
+
+            {/* Language (flat) */}
+            <select
+              value={languageFilter}
+              onChange={(e) => setLanguageFilter(e.target.value)}
+              className="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 outline-none focus:border-zinc-500"
+            >
+              <option value="">All Languages</option>
+              {(() => {
+                const seen = new Set<string>();
+                return tags
+                  .filter((t) => t.facet === "language")
+                  .filter((t) => {
+                    if (seen.has(t.name)) return false;
+                    seen.add(t.name);
+                    return true;
+                  })
+                  .map((t) => (
+                    <option key={t.slug} value={t.slug}>
+                      {t.name}
+                    </option>
+                  ));
+              })()}
+            </select>
+
+            {/* Stance (flat) */}
+            <select
+              value={stanceFilter}
+              onChange={(e) => setStanceFilter(e.target.value)}
+              className="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 outline-none focus:border-zinc-500"
+            >
+              <option value="">All Stances</option>
+              {(() => {
+                const seen = new Set<string>();
+                return tags
+                  .filter((t) => t.facet === "stance")
+                  .filter((t) => {
+                    if (seen.has(t.name)) return false;
+                    seen.add(t.name);
+                    return true;
+                  })
+                  .map((t) => (
+                    <option key={t.slug} value={t.slug}>
+                      {t.name}
+                    </option>
+                  ));
+              })()}
+            </select>
+
+            {/* Clear all filters button */}
+            {(topicFilter || voiceFilter || formatFilter || languageFilter || stanceFilter) && (
+              <button
+                onClick={() => {
+                  setTopicFilter("");
+                  setVoiceFilter("");
+                  setFormatFilter("");
+                  setLanguageFilter("");
+                  setStanceFilter("");
+                  setSearchQuery("");
+                }}
+                className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+
           {reviewLoading ? (
             <p className="text-sm text-zinc-500">Loading…</p>
           ) : (
@@ -702,8 +977,14 @@ export default function AdminPage() {
                     const isBlacklisting = blacklistingId === s.id;
                     return (
                       <tr key={s.id} className="hover:bg-zinc-900/50 transition-colors">
-                        <td className="px-4 py-3 text-zinc-100 max-w-[200px] truncate" title={s.title}>
-                          <div>{s.title}</div>
+                        <td className="px-4 py-3 text-zinc-100 max-w-[200px] truncate">
+                          <Link
+                            href={`/admin/sources/${s.id}`}
+                            className="text-zinc-100 hover:text-white hover:underline transition-colors"
+                            title={s.title}
+                          >
+                            {s.title}
+                          </Link>
                           {s.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
                               {s.tags.map((t) => (

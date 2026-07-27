@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/feed",
-      "schedule": "0 */6 * * *"
+      "schedule": "55 23 * * *"
     },
     {
       "path": "/api/issues/snapshot?cron=1",
