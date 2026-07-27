@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/feed",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/issues/snapshot?cron=1",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}
