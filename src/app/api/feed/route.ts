@@ -33,6 +33,7 @@ interface IssueResponse {
   count: number;
   origin: string;
   isToday: boolean;
+  published: boolean;
 }
 
 // ---- Source interleave helper ----
@@ -90,12 +91,14 @@ export async function GET(req: Request) {
   // 1. Resolve the issue
   let issueQuery = supabase
     .from("issues")
-    .select("id, issue_number, date, origin");
+    .select("id, issue_number, date, origin, published");
 
   if (issueParam) {
     const issueNumber = parseInt(issueParam, 10);
     if (isNaN(issueNumber)) {
-      return NextResponse.json({ issue: null, items: [] });
+      return NextResponse.json({ issue: null, items: [] }, {
+        headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
+      });
     }
     issueQuery = issueQuery.eq("issue_number", issueNumber);
   } else {
@@ -105,7 +108,9 @@ export async function GET(req: Request) {
   const { data: issue } = await issueQuery.maybeSingle();
 
   if (!issue) {
-    return NextResponse.json({ issue: null, items: [] });
+    return NextResponse.json({ issue: null, items: [] }, {
+      headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
+    });
   }
 
   // 2. Load issue articles ordered by position, join articles + sources
@@ -159,8 +164,11 @@ export async function GET(req: Request) {
         count: 0,
         origin: issue.origin,
         isToday: issue.date === todayUTC,
+        published: issue.published,
       },
       items: [],
+    }, {
+      headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
     });
   }
 
@@ -214,8 +222,11 @@ export async function GET(req: Request) {
       count: withTags.length,
       origin: issue.origin,
       isToday: issue.date === todayUTC,
+      published: issue.published,
     } satisfies IssueResponse,
     items: withTags,
+  }, {
+    headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
   });
 }
 
