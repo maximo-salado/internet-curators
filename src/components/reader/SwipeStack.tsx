@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import useEmblaCarousel from "embla-carousel-react";
-import type { EmblaCarouselType } from "embla-carousel";
+import { useState, useCallback, useRef } from "react";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Navigation, Keyboard } from "swiper/modules";
+import type { Swiper as SwiperType } from "swiper";
 import type { Page } from "@/lib/compose-pages";
 import { CaretLeft, CaretRight, CaretDown, List } from "@phosphor-icons/react";
 import CoverPage from "@/components/reader/CoverPage";
@@ -13,6 +14,7 @@ import EditorPage from "@/components/reader/EditorPage";
 import ClosingPage from "@/components/reader/ClosingPage";
 import TocDrawer from "@/components/reader/TocDrawer";
 import NavDrawer from "@/components/reader/NavDrawer";
+import "swiper/css";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,25 +26,6 @@ interface SwipeStackProps {
   onIndexChange?: (index: number) => void;
   issueNumber: number;
   issueDate: string;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Extract clientX / clientY from a TouchEvent or MouseEvent.
- * Returns null when touches are empty (e.g. touchcancel).
- */
-function getEventCoords(
-  evt: TouchEvent | MouseEvent,
-): { x: number; y: number } | null {
-  if ("touches" in evt) {
-    return evt.touches.length > 0
-      ? { x: evt.touches[0].clientX, y: evt.touches[0].clientY }
-      : null;
-  }
-  return { x: evt.clientX, y: evt.clientY };
 }
 
 // ---------------------------------------------------------------------------
@@ -60,44 +43,12 @@ export default function SwipeStack({
   const [selectedIndex, setSelectedIndex] = useState(startIndex);
   const [tocOpen, setTocOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
-  const pointerOrigin = useRef<{ x: number; y: number } | null>(null);
+
+  // -- Swiper instance ref --
+  const swiperRef = useRef<SwiperType>(null);
 
   // -- hover zone for desktop navigation arrows --
   const [hoverZone, setHoverZone] = useState<"prev" | "next" | null>(null);
-
-  // -- gesture strategy: Embla takes horizontal, browser takes vertical --
-  const watchDrag = useCallback(
-    (_emblaApi: EmblaCarouselType, evt: TouchEvent | MouseEvent) => {
-      const coords = getEventCoords(evt);
-      if (!coords) return; // can't decide — let Embla proceed
-
-      if (
-        evt.type === "pointerdown" ||
-        evt.type === "touchstart" ||
-        evt.type === "mousedown"
-      ) {
-        pointerOrigin.current = coords;
-        return; // allow Embla to begin tracking
-      }
-
-      // pointermove / touchmove — decide based on angle
-      if (pointerOrigin.current) {
-        const dx = coords.x - pointerOrigin.current.x;
-        const dy = coords.y - pointerOrigin.current.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        // Too small movement — don't override Embla's default
-        if (dist < 4) return;
-
-        // Angle from horizontal (0 = horizontal, 90 = vertical)
-        const angle = Math.abs(Math.atan2(dy, dx)) * (180 / Math.PI);
-
-        // Vertical gesture (angle > 30°) → let browser scroll native content
-        if (angle > 30) return false;
-      }
-    },
-    [],
-  );
 
   // -- mouse hover zone tracking --
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -116,69 +67,16 @@ export default function SwipeStack({
     setHoverZone(null);
   }, []);
 
-  // -- Embla --
-  const [emblaRef, emblaApi] = useEmblaCarousel(
-    {
-      axis: "x",
-      startIndex,
-      watchDrag,
-    },
-    [],
-  );
-
   // -- navigation arrow click handlers --
-  const handlePrevClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      emblaApi?.scrollPrev();
-    },
-    [emblaApi],
-  );
+  const handlePrevClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    swiperRef.current?.slidePrev();
+  }, []);
 
-  const handleNextClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      emblaApi?.scrollNext();
-    },
-    [emblaApi],
-  );
-
-  // -- sync selectedIndex with Embla snap --
-  const onSelect = useCallback(() => {
-    if (!emblaApi) return;
-    setSelectedIndex(emblaApi.selectedScrollSnap());
-  }, [emblaApi]);
-
-  useEffect(() => {
-    if (!emblaApi) return;
-    onSelect(); // capture initial snap
-    emblaApi.on("select", onSelect);
-    return () => {
-      emblaApi.off("select", onSelect);
-    };
-  }, [emblaApi, onSelect]);
-
-  // -- emit onIndexChange --
-  useEffect(() => {
-    onIndexChange?.(selectedIndex);
-  }, [selectedIndex, onIndexChange]);
-
-  // -- reset pointerOrigin on gesture end --
-  useEffect(() => {
-    if (!emblaApi) return;
-    const root = emblaApi.rootNode();
-    const reset = () => {
-      pointerOrigin.current = null;
-    };
-    root.addEventListener("pointerup", reset);
-    root.addEventListener("touchend", reset);
-    root.addEventListener("touchcancel", reset);
-    return () => {
-      root.removeEventListener("pointerup", reset);
-      root.removeEventListener("touchend", reset);
-      root.removeEventListener("touchcancel", reset);
-    };
-  }, [emblaApi]);
+  const handleNextClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    swiperRef.current?.slideNext();
+  }, []);
 
   // -- render a single page --
   const renderPage = (page: Page) => {
@@ -205,21 +103,30 @@ export default function SwipeStack({
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Embla viewport */}
-      <div ref={emblaRef} className="overflow-hidden">
-        <div className="flex">
-          {pages.map((page, i) => (
-            <div
-              key={i}
-              className="h-[100dvh] w-full flex-[0_0_100%] min-w-0"
-            >
-              {renderPage(page)}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Desktop hover-zone navigation arrows */}
+      {/* Swiper carousel */}
+      <Swiper
+        modules={[Navigation, Keyboard]}
+        direction="horizontal"
+        initialSlide={startIndex}
+        onSlideChange={(swiper) => {
+          setSelectedIndex(swiper.activeIndex);
+          onIndexChange?.(swiper.activeIndex);
+        }}
+        onSwiper={(swiper) => {
+          swiperRef.current = swiper;
+        }}
+        nested
+        resistanceRatio={0}
+        speed={300}
+        spaceBetween={0}
+        slidesPerView={1}
+        keyboard={{ enabled: true }}
+        style={{ height: "100dvh", width: "100%" }}
+      >
+        {pages.map((page, i) => (
+          <SwiperSlide key={i}>{renderPage(page)}</SwiperSlide>
+        ))}
+      </Swiper>
 
       {/* Left hamburger button — opens NavDrawer */}
       <button
@@ -283,7 +190,7 @@ export default function SwipeStack({
         issueDate={issueDate}
         currentIndex={selectedIndex}
         onNavigate={(index) => {
-          emblaApi?.scrollTo(index);
+          swiperRef.current?.slideTo(index);
           setTocOpen(false);
         }}
         open={tocOpen}
