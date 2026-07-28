@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import type { FeedItem } from "@/lib/compose-pages";
 
@@ -61,10 +61,11 @@ export function ArticlePage({ item }: ArticlePageProps) {
           "h1", "h2", "h3", "h4", "h5", "h6",
           "ul", "ol", "li",
           "blockquote", "pre", "code",
-          "a", "img", "figure", "figcaption",
+          "a", "img", "figure",
           "table", "thead", "tbody", "tr", "th", "td",
           "div", "span", "section", "article",
           "hr", "sup", "sub",
+          "figcaption",
         ],
         ALLOWED_ATTR: [
           "href", "src", "alt", "title", "target", "rel",
@@ -97,11 +98,36 @@ export function ArticlePage({ item }: ArticlePageProps) {
     return () => ac.abort();
   }, [item.sourceId]);
 
+  const articleRef = useRef<HTMLElement>(null);
+
+  // Hide images until they load; show alt text only on genuine failure
+  useEffect(() => {
+    if (!sanitizedContent || !articleRef.current) return;
+    const imgs = articleRef.current.querySelectorAll("img");
+    imgs.forEach((img) => {
+      (img as HTMLImageElement).style.display = "none";
+      img.addEventListener(
+        "load",
+        () => {
+          (img as HTMLImageElement).style.display = "";
+        },
+        { once: true },
+      );
+      img.addEventListener(
+        "error",
+        () => {
+          (img as HTMLImageElement).style.display = "";
+        },
+        { once: true },
+      );
+    });
+  }, [sanitizedContent]);
+
   return (
     <div className="h-full overflow-y-auto bg-black text-zinc-100">
-      <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+      <div className="mx-auto max-w-2xl px-5 py-12 sm:px-6">
         {/* Title */}
-        <h1 className="text-2xl font-bold leading-tight tracking-tight sm:text-3xl font-serif">
+        <h1 className="text-[2.5rem] font-bold leading-tight font-serif mb-5">
           {item.title}
         </h1>
 
@@ -117,8 +143,8 @@ export function ArticlePage({ item }: ArticlePageProps) {
           {formatDate(item.pubDate)}
         </a>
 
-        {/* Content snippet (plain text) */}
-        {plainSnippet && (
+        {/* Content snippet (plain text) — only when no structured HTML exists */}
+        {!sanitizedContent && plainSnippet && (
           <p className="mt-6 text-base leading-relaxed text-zinc-400 whitespace-pre-line">
             {plainSnippet}
           </p>
@@ -127,17 +153,22 @@ export function ArticlePage({ item }: ArticlePageProps) {
         {/* Full sanitized HTML content */}
         {sanitizedContent && (
           <article
-            className="prose prose-lg prose-invert prose-zinc mt-8 max-w-none font-serif
-              prose-headings:font-serif prose-headings:tracking-tight prose-headings:text-zinc-100 prose-headings:font-semibold
-              prose-p:text-zinc-300 prose-p:leading-relaxed prose-p:my-6
+            ref={articleRef}
+            className="prose prose-xl prose-invert prose-zinc mt-8 max-w-none font-serif
+              prose-headings:font-serif prose-headings:tracking-tight prose-headings:text-zinc-100 prose-headings:font-bold
+              prose-headings:mt-10 prose-headings:mb-4
+              [&_p]:text-[20px] [&_p]:leading-[32px] [&_p]:text-zinc-300 [&_p]:mb-[30px]
               prose-a:text-blue-400 prose-a:underline prose-a:decoration-1 prose-a:underline-offset-2 hover:prose-a:text-blue-300
               prose-strong:text-zinc-200
-              prose-blockquote:border-zinc-600 prose-blockquote:text-zinc-400 prose-blockquote:italic
+              [&_blockquote]:border-l-[3px] [&_blockquote]:border-zinc-500 [&_blockquote]:text-zinc-400 [&_blockquote]:italic [&_blockquote]:pl-5
+
               prose-code:rounded prose-code:bg-zinc-800 prose-code:px-1 prose-code:text-zinc-300
               prose-pre:border prose-pre:border-zinc-800 prose-pre:bg-zinc-900
-              prose-img:my-6 prose-img:rounded-lg
+              prose-img:my-14 prose-img:rounded-lg
+              [&_figure]:mb-14
               prose-li:text-zinc-300
               prose-hr:border-zinc-800
+              [&_figcaption]:text-sm [&_figcaption]:text-zinc-400 [&_figcaption]:mt-4 [&_figcaption]:mb-8 [&_figcaption]:leading-relaxed
             "
             dangerouslySetInnerHTML={{ __html: sanitizedContent }}
           />
