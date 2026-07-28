@@ -148,7 +148,7 @@ export function ArticlePage({ item }: ArticlePageProps) {
 
   return (
     <div className="h-full overflow-y-auto bg-black text-zinc-100">
-      <div className="mx-auto max-w-2xl px-5 py-12 sm:px-6">
+      <div className="mx-auto max-w-2xl px-5 pt-20 pb-16 sm:px-6">
         {/* Title */}
         <h1 className="text-[2.5rem] font-bold leading-tight font-serif mb-5">
           {item.title}
