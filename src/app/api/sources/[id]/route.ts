@@ -1,6 +1,48 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createClient();
+  const { id } = await params;
+
+  const { data: source, error: fetchErr } = await supabase
+    .from("sources")
+    .select("id, title, description, site_url")
+    .eq("id", id)
+    .single();
+
+  if (fetchErr || !source) {
+    return NextResponse.json({ error: "Source not found" }, { status: 404 });
+  }
+
+  // Fetch source tags
+  let tags: Array<{ id: string; name: string; slug: string; facet: string }> = [];
+  const { data: tagRows } = await supabase
+    .from("source_tags")
+    .select("tag_id, tags!inner(id, name, slug, facet)")
+    .eq("source_id", id);
+
+  if (tagRows) {
+    tags = tagRows.map((r: any) => ({
+      id: r.tags.id,
+      name: r.tags.name,
+      slug: r.tags.slug,
+      facet: r.tags.facet,
+    }));
+  }
+
+  return NextResponse.json({
+    id: source.id,
+    title: source.title,
+    description: source.description,
+    site_url: source.site_url,
+    tags,
+  });
+}
+
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
