@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Keyboard } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
@@ -9,8 +9,8 @@ import {
   CaretLeft,
   CaretRight,
   List,
-  ArrowsIn,
-  ArrowsOut,
+  Check,
+  Share,
 } from "@phosphor-icons/react";
 import CoverPage from "@/components/reader/CoverPage";
 import { ContextPage } from "@/components/reader/ContextPage";
@@ -50,24 +50,20 @@ export default function SwipeStack({
   const [tocOpen, setTocOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
 
-  // -- fullscreen state --
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  // -- share state --
+  const [copied, setCopied] = useState(false);
 
-  const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    } else {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    }
+  const handleShare = useCallback(async () => {
+    await navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }, []);
 
+  // -- sync URL on slide change --
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
-  }, []);
+    const url = `/issue/${issueNumber}?page=${selectedIndex + 1}`;
+    window.history.replaceState(null, "", url);
+  }, [selectedIndex, issueNumber]);
 
   // -- Swiper instance ref --
   const swiperRef = useRef<SwiperType>(null);
@@ -140,13 +136,20 @@ export default function SwipeStack({
           <span className="text-zinc-400">#{issueNumber}</span>
         </button>
         <button
-          onClick={toggleFullscreen}
+          onClick={handleShare}
           className="text-zinc-300 hover:text-white transition-colors"
-          aria-label="Toggle fullscreen"
+          aria-label="Copy link to share"
         >
-          {isFullscreen ? <ArrowsIn size={18} /> : <ArrowsOut size={18} />}
+          {copied ? <Check size={18} /> : <Share size={18} />}
         </button>
       </header>
+
+      {/* Copied toast */}
+      {copied && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 text-xs text-white bg-zinc-800/90 px-3 py-1.5 rounded-full backdrop-blur">
+          Copied to clipboard
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="fixed bottom-0 inset-x-0 z-40 h-14 flex items-center justify-between px-6">
