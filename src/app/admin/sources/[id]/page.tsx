@@ -22,6 +22,18 @@ interface AvailableTag {
   display_order: number | null;
 }
 
+interface TopicSuggestion {
+  id: string;
+  name: string;
+  slug: string;
+  score: number;
+}
+
+interface SuggestedTopic {
+  id: string;
+  name: string;
+}
+
 interface DiscoveredSource {
   id: string;
   title: string;
@@ -68,6 +80,12 @@ export default function SourceDetailPage() {
   const [addTagSelect, setAddTagSelect] = useState("");
   const [addingTag, setAddingTag] = useState(false);
 
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<TopicSuggestion[]>([]);
+  const [suggestedTopics, setSuggestedTopics] = useState<SuggestedTopic[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [addingSuggestion, setAddingSuggestion] = useState<string | null>(null);
+
   // ── Fetch source ──────────────────────────────────
 
   const fetchSource = useCallback(async () => {
@@ -104,10 +122,28 @@ export default function SourceDetailPage() {
     }
   }, []);
 
+  // ── Fetch topic suggestions ──────────────────────
+
+  const fetchSuggestions = useCallback(async () => {
+    setSuggestionsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/sources/${sourceId}/suggest-topics`);
+      if (!res.ok) throw new Error("Failed to fetch suggestions");
+      const data = await res.json();
+      setSuggestions(data.suggested ?? []);
+      setSuggestedTopics(data.current ?? []);
+    } catch {
+      // non-critical
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }, [sourceId]);
+
   useEffect(() => {
     fetchSource();
     fetchAllTags();
-  }, [fetchSource, fetchAllTags]);
+    fetchSuggestions();
+  }, [fetchSource, fetchAllTags, fetchSuggestions]);
 
   // ── Review actions ────────────────────────────────
 
@@ -170,6 +206,14 @@ export default function SourceDetailPage() {
     await updateSourceTags(newTagIds);
     setAddingTag(false);
     setAddTagSelect("");
+  };
+
+  const acceptSuggestion = async (tagId: string) => {
+    if (!source) return;
+    setAddingSuggestion(tagId);
+    const newTagIds = [...source.tag_ids, tagId];
+    await updateSourceTags(newTagIds);
+    setAddingSuggestion(null);
   };
 
   const updateSourceTags = async (tagIds: string[]) => {
@@ -242,6 +286,12 @@ export default function SourceDetailPage() {
   // Sort facets for display
   const facetOrder = ["topic", "voice", "format", "language", "stance"];
   const sortedFacets = facetOrder.filter((f) => tagsByFacet.has(f));
+
+  // ── Suggestions computed ──────────────────────────
+
+  const currentTopicIds = new Set(suggestedTopics.map((t) => t.id));
+  // Filter suggestions to exclude already-assigned topics
+  const filteredSuggestions = suggestions.filter((s) => !currentTopicIds.has(s.id));
 
   // ── Render ────────────────────────────────────────
 
@@ -392,6 +442,71 @@ export default function SourceDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Topic Suggestions */}
+      {(!suggestionsLoading || suggestions.length > 0 || suggestedTopics.length > 0) && (
+        <div className="mb-6 rounded-lg border border-blue-900/40 bg-blue-950/20 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-xs font-medium text-blue-400">Topic Suggestions</span>
+            {suggestionsLoading && (
+              <span className="text-xs text-zinc-500">Analyzing articles…</span>
+            )}
+          </div>
+
+          {/* Already-assigned topics (locked) */}
+          {suggestedTopics.length > 0 && (
+            <div className="mb-3">
+              <div className="mb-1.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                Assigned
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {suggestedTopics.map((t) => (
+                  <span
+                    key={t.id}
+                    className="inline-flex items-center gap-1 rounded-full border border-blue-800 bg-blue-900/30 px-2 py-0.5 text-xs font-medium text-blue-300"
+                  >
+                    {t.name}
+                    <span className="text-[10px] opacity-60">✓</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Suggested topics (click to add) */}
+          {filteredSuggestions.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                Suggested ({filteredSuggestions.length})
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {filteredSuggestions.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => acceptSuggestion(s.id)}
+                    disabled={addingSuggestion === s.id}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
+                      addingSuggestion === s.id
+                        ? "border-zinc-600 bg-zinc-700/50 text-zinc-400 cursor-wait"
+                        : "border-blue-800 bg-blue-900/30 text-blue-300 hover:bg-blue-800/40 hover:text-blue-200"
+                    }`}
+                    title={`Add "${s.name}" tag (${s.score} keyword hits)`}
+                  >
+                    + {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state: no suggestions after loading */}
+          {!suggestionsLoading && filteredSuggestions.length === 0 && suggestedTopics.length === 0 && (
+            <p className="text-xs text-zinc-600">
+              No topic suggestions available. Add articles or wait for more content to get better matches.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Tags */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
