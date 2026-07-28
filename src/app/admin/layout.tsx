@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 export default async function AdminLayout({
   children,
@@ -8,5 +9,32 @@ export default async function AdminLayout({
 }) {
   const user = await requireAdmin();
   if (!user) redirect("/");
-  return <>{children}</>;
+
+  return (
+    <div className="min-h-full bg-black text-zinc-100">
+      <header className="flex items-center justify-between border-b border-zinc-800 px-6 py-3">
+        <Link
+          href="/admin"
+          className="text-sm font-semibold text-zinc-100 hover:text-white transition-colors"
+        >
+          Admin
+        </Link>
+        <nav className="flex items-center gap-4">
+          <Link
+            href="/"
+            className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+          >
+            &larr; Back to site
+          </Link>
+          <Link
+            href="/auth/signout"
+            className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+          >
+            Sign out
+          </Link>
+        </nav>
+      </header>
+      <main>{children}</main>
+    </div>
+  );
 }
