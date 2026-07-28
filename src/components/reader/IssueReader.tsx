@@ -108,9 +108,18 @@ export default function IssueReader({
 
         const composedPages = composePages(data.issue, data.items);
 
-        // Resolve resume index — only for today's issue (no explicit issueNumber)
+        // Resolve resume index — URL param takes priority, then localStorage
         let resumeIndex = 0;
-        if (propIssueNumber == null) {
+
+        const pageParam = new URL(
+          window.location.href,
+        ).searchParams.get("page");
+        if (pageParam != null) {
+          const parsed = parseInt(pageParam, 10);
+          if (!isNaN(parsed) && parsed > 0) {
+            resumeIndex = parsed - 1; // 1-indexed → 0-indexed
+          }
+        } else if (propIssueNumber == null) {
           const saved = loadResumeData();
           if (saved && saved.issueNumber === data.issue.number) {
             resumeIndex = saved.index;

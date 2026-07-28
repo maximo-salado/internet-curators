@@ -94,7 +94,7 @@ export async function GET(req: Request) {
     .select("id, issue_number, date, origin, published");
 
   if (issueParam) {
-    const issueNumber = parseInt(issueParam, 10);
+    const issueNumber = parseFloat(issueParam);
     if (isNaN(issueNumber)) {
       return NextResponse.json({ issue: null, items: [] }, {
         headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
