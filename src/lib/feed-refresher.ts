@@ -3,7 +3,7 @@ import Parser from "rss-parser";
 
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
-// --- Taxonomy keyword matching ---
+// --- Taxonomy keyword matching (voice, stance, format, language — NOT topic) ---
 interface TagKeyword {
   tag_id: string;
   keywords: string[];
@@ -16,13 +16,25 @@ async function loadTagKeywords(supabase: any): Promise<TagKeyword[]> {
   const { data } = await supabase
     .from("tags")
     .select("id, keywords")
-    .in("facet", ["topic", "voice"])
+    .in("facet", ["voice", "stance", "format", "language"])
     .not("keywords", "eq", "{}");
   tagKeywordsCache = (data ?? []).map((t: any) => ({
     tag_id: t.id,
     keywords: t.keywords,
   }));
   return tagKeywordsCache!;
+}
+
+/** Inherit source topic tags from source_tags JOIN tags WHERE facet = 'topic'. */
+async function loadSourceTopicTags(supabase: any, sourceId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from("source_tags")
+    .select("tag_id, tags!inner(id, facet)")
+    .eq("source_id", sourceId);
+
+  return (data ?? [])
+    .filter((row: any) => row.tags?.facet === "topic")
+    .map((row: any) => row.tag_id);
 }
 
 function matchKeywords(text: string, tagKeywords: TagKeyword[]): string[] {
@@ -136,12 +148,17 @@ export async function refreshStaleSources(sources: RefreshSource[]): Promise<voi
             ignoreDuplicates: false,
           });
 
-          // --- Tag resolution (keyword-matched only — inherited tags resolve at query time) ---
+          // --- Tag resolution: inherit source topic tags + keyword-match voice/stance/format/language ---
+          const sourceTopicTagIds = await loadSourceTopicTags(serviceClient, source.id);
+
           const tagKeywords = await loadTagKeywords(serviceClient);
           const searchText = [article.title, article.content_snippet ?? ""].join(" ");
           const keywordTagIds = matchKeywords(searchText, tagKeywords);
 
-          if (keywordTagIds.length > 0) {
+          // Combine inherited topic tags with keyword-matched voice/stance/format/language tags
+          const allTagIds = [...new Set([...sourceTopicTagIds, ...keywordTagIds])];
+
+          if (allTagIds.length > 0) {
             const { data: existingArticle } = await serviceClient
               .from("articles")
               .select("id")
@@ -155,7 +172,7 @@ export async function refreshStaleSources(sources: RefreshSource[]): Promise<voi
                 .delete()
                 .eq("article_id", existingArticle.id);
 
-              const tagRows = keywordTagIds.map((tag_id) => ({
+              const tagRows = allTagIds.map((tag_id) => ({
                 article_id: existingArticle.id,
                 tag_id,
               }));
