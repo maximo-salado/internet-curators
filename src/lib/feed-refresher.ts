@@ -3,7 +3,7 @@ import Parser from "rss-parser";
 
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
-// --- Taxonomy keyword matching (voice, stance, format, language — NOT topic) ---
+// --- Taxonomy keyword matching (format, language — NOT topic, voice, stance) ---
 interface TagKeyword {
   tag_id: string;
   keywords: string[];
@@ -16,7 +16,7 @@ async function loadTagKeywords(supabase: any): Promise<TagKeyword[]> {
   const { data } = await supabase
     .from("tags")
     .select("id, keywords")
-    .in("facet", ["voice", "stance", "format", "language"])
+    .in("facet", ["format", "language"])
     .not("keywords", "eq", "{}");
   tagKeywordsCache = (data ?? []).map((t: any) => ({
     tag_id: t.id,
@@ -148,14 +148,14 @@ export async function refreshStaleSources(sources: RefreshSource[]): Promise<voi
             ignoreDuplicates: false,
           });
 
-          // --- Tag resolution: inherit source topic tags + keyword-match voice/stance/format/language ---
+          // --- Tag resolution: inherit source topic tags + keyword-match format/language ---
           const sourceTopicTagIds = await loadSourceTopicTags(serviceClient, source.id);
 
           const tagKeywords = await loadTagKeywords(serviceClient);
           const searchText = [article.title, article.content_snippet ?? ""].join(" ");
           const keywordTagIds = matchKeywords(searchText, tagKeywords);
 
-          // Combine inherited topic tags with keyword-matched voice/stance/format/language tags
+          // Combine inherited topic tags with keyword-matched format/language tags
           const allTagIds = [...new Set([...sourceTopicTagIds, ...keywordTagIds])];
 
           if (allTagIds.length > 0) {
