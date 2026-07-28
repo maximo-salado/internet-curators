@@ -44,6 +44,9 @@ export default function SwipeStack({
   const [tocOpen, setTocOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
 
+  // -- blur transition state --
+  const [blurAmount, setBlurAmount] = useState(0);
+
   // -- Swiper instance ref --
   const swiperRef = useRef<SwiperType>(null);
 
@@ -111,6 +114,14 @@ export default function SwipeStack({
         onSlideChange={(swiper) => {
           setSelectedIndex(swiper.activeIndex);
           onIndexChange?.(swiper.activeIndex);
+          setBlurAmount(0);
+        }}
+        onSliderMove={(swiper) => {
+          const progress = Math.abs(swiper.progress);
+          setBlurAmount(Math.min(progress * 8, 8)); // max 8px blur
+        }}
+        onTouchEnd={() => {
+          setBlurAmount(0);
         }}
         onSwiper={(swiper) => {
           swiperRef.current = swiper;
@@ -124,7 +135,17 @@ export default function SwipeStack({
         style={{ height: "100dvh", width: "100%" }}
       >
         {pages.map((page, i) => (
-          <SwiperSlide key={i}>{renderPage(page)}</SwiperSlide>
+          <SwiperSlide key={i}>
+            <div
+              style={{
+                filter: `blur(${blurAmount}px)`,
+                transition: "filter 300ms ease-out",
+                height: "100%",
+              }}
+            >
+              {renderPage(page)}
+            </div>
+          </SwiperSlide>
         ))}
       </Swiper>
 
