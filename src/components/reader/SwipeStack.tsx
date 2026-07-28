@@ -119,8 +119,8 @@ export default function SwipeStack({
       </Swiper>
 
       {/* Gradient overlays */}
-      <div className="pointer-events-none fixed top-0 inset-x-0 z-30 h-20 bg-gradient-to-b from-black/60 to-transparent" />
-      <div className="pointer-events-none fixed bottom-0 inset-x-0 z-30 h-20 bg-gradient-to-t from-black/60 to-transparent" />
+      <div className="pointer-events-none fixed top-0 inset-x-0 z-30 h-20 bg-gradient-to-b from-black/90 to-transparent" />
+      <div className="pointer-events-none fixed bottom-0 inset-x-0 z-30 h-20 bg-gradient-to-t from-black/90 to-transparent" />
 
       {/* Header */}
       <header className="fixed top-0 inset-x-0 z-40 h-14 flex items-center justify-between px-4">
