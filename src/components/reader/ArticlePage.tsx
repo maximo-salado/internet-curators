@@ -133,7 +133,7 @@ export function ArticlePage({ item }: ArticlePageProps) {
 
         {/* Source + date */}
         <a
-          href={item.sourceUrl}
+          href={item.link}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-2 inline-block text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
