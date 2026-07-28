@@ -1,125 +1,174 @@
-# RSSMag — Daily Snapshot Implementation Plan (v4)
+# RSSMag — Daily Snapshot Implementation Plan (v5)
 
-> Supersedes v3 ("Model C"). Same model — daily frozen issue, never-repeat, numbered + dated. Fixes two build-breaking / data-corrupting flaws.
+> Supersedes v4. Same Model C — daily frozen issue, never-repeat, numbered + dated. Fixes build order (leaves-first), drops Section filtering from Phase 2, adds gesture strategy, caching, and v4 review findings.
 
-## v4 Fixes (vs v3)
+## v5 Changes (vs v4)
 
-| # | v3 flaw | v4 fix |
-|---|---------|--------|
-| C1 | `(reader)/page.tsx` + existing `page.tsx` both claim `/` → **build error**. Route group layout nests inside root which renders global chrome → reader can never be chrome-free | Root layout stripped to `<html><body>`. All existing routes + chrome moved into `(main)/` group. Old `page.tsx` deleted. `(reader)/page.tsx` cleanly owns `/` |
-| C2 | Snapshot did separate `issues` insert + N `issue_articles` inserts → no transaction → **orphan empty issue** possible | Single Postgres RPC (`create_daily_issue`, SECURITY DEFINER) does everything in one transaction. Advisory lock for issue_number. Any failure = full rollback |
-| S1 | Idempotency was plain SELECT (TOCTOU race) | `issues.date UNIQUE` + advisory lock + catch `23505` → treat as idempotent |
-| S2 | Never-repeat only by article_id → same URL re-ingested as new row could repeat | Pool excludes every `link` present in any past `issue_articles` |
-| S3 | Resume index into client array → editorial slots drifted | Page composition is a pure function of the issue payload: `composePages(issue, items) → Page[]` |
-| S4 | Day-1 "zero everything" undefined | `/api/feed` empty response: `{issue: null, items: []}`, HTTP 200. Seed Issue #1 = hard launch gate |
-| S5 | refreshStaleSources inside snapshot → slow/failing refresh blocks issue creation | Refresh runs separately at 23:55 UTC. Snapshot at 00:00 UTC. Decoupled |
-| S6 | No explicit "apply migration" step | Migration apply = Task 3 |
-| S7 | Sanitization hand-waved | ArticlePage delegates to existing `ArticleReader` DOMPurify |
+| # | v4 | v5 |
+|---|-----|-----|
+| B1 | Build order: IssueReader → SwipeStack → page components | Leaves-first: composePages() types → page components → SwipeStack → IssueReader → page.tsx |
+| S1 | Section pages: tap topic → filter stack | Section pages: purely informational (display topics). Filtering contradicts the frozen snapshot model |
+| S2 | Closing + Ending as separate pages | Merged into one Closing card |
+| S3 | No gesture strategy specified | `touch-action: pan-y` on Embla container + `watchDrag` with angle detection (>30° from horizontal = browser scroll) |
+| S4 | No cache strategy | `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400` on /api/feed |
+| S5 | SSR resume not addressed | `scrollTo(savedIndex, true)` for instant jump, no flash |
+| S6 | Image layout shift not addressed | Fixed aspect-ratio containers on article images |
+| S7 | Editor page: hardcoded | Read editor name/note from config/env |
+| S8 | Section cadence at tail not handled | Clamp: suppress final Section if < 3 articles remain after it |
+| S9 | contentSnippet sanitization not addressed | Sanitize contentSnippet before rendering (can contain HTML from feed parser) |
+| S10 | No `published` field in feed response | Add `published` to IssueResponse type (used by admin) |
 
-## Route Structure
+## Route Structure (unchanged from v4)
 
 ```
 src/app/
   layout.tsx                 # ROOT — <html><body> only. No chrome, no auth.
   (main)/                    # public app WITH chrome (Header/Footer/BottomNav)
     layout.tsx               # getUser() + Header + Footer + BottomNav
-    about/page.tsx
-    login/page.tsx
     ...existing routes...
   (reader)/                  # RSSMag reader, NO chrome
     layout.tsx               # h-[100dvh] overflow-hidden bg-black
-    page.tsx                 # "/" — today's issue
+    page.tsx                 # "/" — today's issue (thin shell, calls IssueReader)
     issue/[number]/page.tsx  # "/issue/7" — archive
   admin/                     # standalone, under bare root layout
 ```
 
-## Data Model
+## Data Model (unchanged from v4)
 
-**Migration 022:** `issues` + `issue_articles` tables with RLS (public read, service role write), `uniq_article_one_issue` constraint.
+- `issues` table: id, issue_number (numeric 10,1), date, origin, published, created_at
+- `issue_articles` junction: issue_id, article_id, position. UNIQUE(article_id) = never-repeat
+- `create_daily_issue(p_date, p_origin, p_article_ids)` RPC — atomic, advisory lock, idempotent
+- 0.x numbering for test phase (increment by 0.1), switch to +1 when live
 
-**Migration 023:** `create_daily_issue(p_date, p_origin, p_article_ids)` — Postgres RPC, SECURITY DEFINER. One transaction: advisory lock → idempotency check → assign issue_number → insert issue row → insert all article rows. Any failure = full rollback. No orphan issues.
+## Feed API (unchanged from v4)
 
-## Snapshot Job
+`GET /api/feed` → today's issue. `GET /api/feed?issue=N` → archive.
 
-`POST /api/issues/snapshot` — CRON_SECRET bearer auth. Algorithm:
-1. Build eligible pool: sources NOT hidden, NOT blacklisted, articles NOT in any past issue (by link), deduped, newest-first
-2. Interleave by source, take up to 20. Order = issue order.
-3. Empty pool → return `{created: false, reason: "empty_pool"}`
-4. Call RPC, catch 23505 → idempotent
-5. Return `{created: true, issueNumber, date, count}`
+**v5 addition:** `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400` on the response.
 
-**Crons:** 23:55 UTC refresh (existing POST /api/feed), 00:00 UTC snapshot.
+## Reader Architecture
 
-## Feed API
+### composePages(issue, items) → Page[]
 
-`GET /api/feed` → today's issue. `GET /api/feed?issue=7` → archive. Returns `{issue: {number, date, count, origin, isToday}, items: [...articles with full content and tags]}`. Empty day: `{issue: null, items: []}`.
-
-## Reader
-
-`(reader)/page.tsx` fetches today's issue, builds page array via `composePages()`:
+Pure function. Deterministic. Given an issue payload and items array, returns the complete page stack:
 
 ```
-Cover → Context → [articles, Section every 5, Editor at floor(count/2)] → Closing
+Cover → Context → [Article ×5] → Section → [Article ×5] → Editor → [Article ×5] → Section → [Article ×5] → Closing
 ```
 
-- **Resume:** localStorage `{issueNumber, index}`, self-invalidating on number change
-- **Empty:** "Today's issue is still being assembled."
-- **Sanitization:** ArticlePage delegates to existing `ArticleReader` (DOMPurify)
-- **Section pages:** real topic slugs from this issue's tags (facet=topic)
-- **Dynamic counts:** all copy reads from `issue.count`, no hardcoded 20
+**Section cadence rules:**
+- Section page after every 5 articles
+- Editor page at `floor(count/2)` position in the article sequence
+- Suppress final Section page if fewer than 3 articles remain after it
+- Article count (`issue.count`) drives all copy — no hardcoded "20"
 
-## Tasks
-
-| # | Task | Type |
-|---|------|------|
-| 1 | Spike: Embla vs Swiper for swipe stack with nested scroll | spike |
-| 2 | Migrations 022 + 023 | build |
-| 3 | Apply migrations to DB | build |
-| 4 | Route restructure (root → shell, (main)/ group, (reader)/ group, delete old page.tsx) | build |
-| 5 | POST /api/issues/snapshot | build |
-| 6 | Crons: 23:55 refresh, 00:00 snapshot | build |
-| 7 | Rework GET /api/feed → frozen issue + empty shape | modify |
-| 8 | (reader)/page.tsx + IssueReader + localStorage resume | build |
-| 9 | SwipeStack component | build |
-| 10 | composePages() + all 6 page components | build |
-| 11 | Empty-state page | build |
-| 12 | Archive scaffold /issue/[number] | scaffold |
-| 13 | Remove dead reader code | cleanup |
-| 14 | (Optional) remount discovery at (main)/discover | build |
-| 15 | npm run build (confirms no / route collision) | verify |
-| 16 | Seed Issue #1 — hard launch gate | verify |
-| 17 | Idempotency + race test | verify |
-| 18 | Verify /admin still works | verify |
-| 19 | iOS Safari QA | verify |
-
-## Order
-
-```
-Phase 1 — ADMIN + PIPELINE (no reader UI touched)
-  A1 — Spike: Embla vs Swiper (1)
-  B1 — DB + RPC + apply (2-3)
-  C1 — Route restructure: root layout shell, (main)/ group, (reader)/ group shell, 
-       delete old page.tsx — BUT (reader)/page.tsx renders placeholder only (4, 15)
-  D1 — Snapshot + crons (5-6)
-  E1 — Feed API rework (7)
-  F1 — Seed Issue #1 manually after Max approves sources (16)
-  G1 — Verify admin panel fully functional: source management, tag management,
-       approval workflow, hide/delete/blacklist (18)
-
-Phase 2 — READER (build after admin + pipeline are solid)
-  H2 — IssueReader + localStorage resume (8)
-  I2 — SwipeStack component (9)
-  J2 — composePages() + all 6 page components (10)
-  K2 — Empty-state page (11)
-  L2 — Archive scaffold (12)
-
-Phase 3 — CLEANUP + QA
-  M3 — Remove dead reader code (13)
-  N3 — (Optional) remount discovery at (main)/discover (14)
-  O3 — Idempotency + race test (17)
-  P3 — iOS Safari QA (19)
+**Page type union:**
+```ts
+type Page = 
+  | { type: "cover" }
+  | { type: "context" }
+  | { type: "article"; item: FeedItem }
+  | { type: "section"; topics: Tag[] }
+  | { type: "editor" }
+  | { type: "closing"; count: number };
 ```
 
-**Phase 1 gate:** Max approves sources → snapshot creates Issue #1 → `/api/feed` returns real articles. Admin verified working. Then Phase 2 begins.
+**Section pages are informational only.** They display the topics present in this issue's articles (facet=topic). No tap-to-filter. Filtering contradicts the frozen snapshot model — a fixed 20-article stack can't reorganize mid-session without breaking the ending and localStorage resume.
 
-**Phase 2 gate:** Reader at `/` shows Cover → Context → real articles → Closing. Build passes. Then Phase 3 begins.
+### SwipeStack Component
+
+Embla Carousel wrapper. One slide per page in the stack.
+
+```tsx
+<SwipeStack pages={pages} startIndex={savedIndex} onIndexChange={handleIndexChange} />
+```
+
+**Gesture strategy:**
+```
+Embla container: touch-action: pan-y, overflow: hidden
+  └── Each slide: h-[100dvh] overflow-y-auto for articles
+```
+
+- `touch-action: pan-y` tells browser: vertical scroll is yours, don't surrender to JS
+- `watchDrag` predicate: compute movement angle from touchstart. If within 30° of horizontal → Embla takes it + `preventDefault()`. Otherwise → browser scrolls
+- Test on iOS Safari early (not left to Phase 3 QA)
+
+### IssueReader Component
+
+`'use client'`. Fetches `/api/feed`, calls `composePages()`, manages localStorage resume.
+
+```
+localStorage key: "rssmag-resume"
+Value: { issueNumber: number, index: number }
+Self-invalidates when issueNumber changes.
+On resume: scrollTo(savedIndex, true) — instant, no animation flash.
+```
+
+### Individual Page Components
+
+| Page | Component | Key behaviors |
+|------|-----------|---------------|
+| Cover | `CoverPage` | Mag name, one-liner, subtle swipe hint (arrow/indicator) |
+| Context | `ContextPage` | Editorial stance text, one screen |
+| Article | `ArticlePage` | Full-screen. Title, aspect-ratio image container, content via DOMPurify, source link. `overflow-y-auto` for long content. `contentSnippet` sanitized before render |
+| Section | `SectionPage` | Lists topic tags from this issue. Informational only — no tap interaction in Phase 2 |
+| Editor | `EditorPage` | Face, name, note. Read from config/env, not hardcoded |
+| Closing | `ClosingPage` | Editor note, "get in touch" link, GitHub link, "come back tomorrow." Designed ending |
+
+## Tasks (v5)
+
+| # | Task | Type | Depends on |
+|---|------|------|------------|
+| 1 | Define Page type union + composePages() function | types | — |
+| 2 | CoverPage component | build | 1 |
+| 3 | ContextPage component | build | 1 |
+| 4 | ArticlePage component | build | 1 |
+| 5 | SectionPage component | build | 1 |
+| 6 | EditorPage component | build | 1 |
+| 7 | ClosingPage component | build | 1 |
+| 8 | SwipeStack component (Embla + gesture strategy) | build | 1 |
+| 9 | IssueReader component (fetch + compose + localStorage) | build | 1, 8 |
+| 10 | Rewrite (reader)/page.tsx (thin shell → IssueReader) | modify | 9 |
+| 11 | Empty-state page (issue is null → "still being assembled") | build | 10 |
+| 12 | Archive scaffold /issue/[number] | scaffold | 10 |
+| 13 | Cache-Control headers on /api/feed | modify | — |
+| 14 | Add `published` to IssueResponse type | modify | — |
+| 15 | npm run build | verify | all |
+| 16 | iOS Safari QA (especially gesture conflict) | verify | 8 |
+
+## Build Order
+
+```
+Phase 2a — FOUNDATIONS (parallel-safe)
+  A1 — Page type union + composePages() (1)
+  A2 — Cache-Control + published field (13-14) — parallel with A1
+
+Phase 2b — PAGE COMPONENTS (all parallel, different files)
+  B1 — CoverPage (2)
+  B2 — ContextPage (3)
+  B3 — ArticlePage (4)
+  B4 — SectionPage (5)
+  B5 — EditorPage (6)
+  B6 — ClosingPage (7)
+
+Phase 2c — WIRING (sequential)
+  C1 — SwipeStack with gesture strategy (8)
+  C2 — IssueReader (9)
+  C3 — Rewrite page.tsx (10)
+  C4 — Empty-state (11)
+  C5 — Archive scaffold (12)
+
+Phase 2d — VERIFY
+  D1 — npm run build (15)
+  D2 — iOS Safari QA (16)
+```
+
+**Phase 2 gate:** Reader at `/` shows Cover → Context → real articles → Closing. Build passes. Then Phase 3 (cleanup) begins.
+
+## Out of Scope (Phase 2)
+
+- Section page tap-to-filter (contradicts frozen snapshot model — revisit as separate feature)
+- Article action buttons (save, share — future dossier phase)
+- User accounts or auth in reader
+- Personalization or algorithmic ordering
+- Multiple editors (one editor config for now)
