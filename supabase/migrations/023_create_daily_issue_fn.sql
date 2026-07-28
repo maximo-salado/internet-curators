@@ -1,20 +1,22 @@
 -- 023_create_daily_issue_fn.sql
 -- Atomic snapshot function. One transaction, no orphan issues.
 -- SECURITY DEFINER to write past RLS. Only service_role can execute.
+-- Test-phase numbering: increments by 0.1 (0.1, 0.2, ...).
+-- Switch to +1 when going live by changing the increment on line 35.
 
 CREATE OR REPLACE FUNCTION create_daily_issue(
   p_date        date,
   p_origin      text,
   p_article_ids uuid[]
 )
-RETURNS TABLE (issue_id uuid, issue_number int, created boolean)
+RETURNS TABLE (issue_id uuid, issue_number numeric, created boolean)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
   v_issue_id     uuid;
-  v_issue_number int;
+  v_issue_number numeric;
 BEGIN
   -- Serialize across concurrent cron fires.
   PERFORM pg_advisory_xact_lock(hashtext('create_daily_issue'));
@@ -32,7 +34,7 @@ BEGIN
     RAISE EXCEPTION 'empty_pool' USING ERRCODE = 'P0001';
   END IF;
 
-  v_issue_number := COALESCE((SELECT max(issue_number) FROM issues), 0) + 1;
+  v_issue_number := COALESCE((SELECT max(issues.issue_number) FROM issues), 0) + 0.1;
 
   INSERT INTO issues (issue_number, date, origin, published)
   VALUES (v_issue_number, p_date, p_origin, true)
