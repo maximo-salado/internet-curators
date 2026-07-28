@@ -101,6 +101,12 @@ export default function AdminPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>("");
 
+  // Sort & pagination
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [currentOffset, setCurrentOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+
   // Issue state
   const [issueLoading, setIssueLoading] = useState(false);
   const [issue, setIssue] = useState<IssueData | null>(null);
@@ -133,12 +139,12 @@ export default function AdminPage() {
 
   // ── Fetch Review Queue ───────────────────────────
 
-  const fetchDiscoveredSources = useCallback(async (status?: string) => {
+  const fetchDiscoveredSources = useCallback(async (status?: string, offset = 0, append = false) => {
     setReviewLoading(true);
     setReviewError(null);
     const s = status ?? reviewStatusFilter;
     try {
-      let url = `/api/discover/sources?status=${s}&limit=50`;
+      let url = `/api/discover/sources?status=${s}&limit=50&offset=${offset}&order=${sortOrder}`;
       if (topicFilter) url += `&tag=${encodeURIComponent(topicFilter)}`;
       if (voiceFilter) url += `&tag=${encodeURIComponent(voiceFilter)}`;
       if (formatFilter) url += `&tag=${encodeURIComponent(formatFilter)}`;
@@ -148,13 +154,21 @@ export default function AdminPage() {
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch discovered sources");
       const data = await res.json();
-      setDiscoveredSources(data.items ?? []);
+      const newItems = data.items ?? [];
+      if (append) {
+        setDiscoveredSources((prev) => [...prev, ...newItems]);
+      } else {
+        setDiscoveredSources(newItems);
+      }
+      setTotalCount(data.total ?? 0);
+      setHasMore(data.hasMore ?? false);
+      if (!append) setCurrentOffset(offset);
     } catch (e: any) {
       setReviewError(e.message);
     } finally {
       setReviewLoading(false);
     }
-  }, [reviewStatusFilter, topicFilter, voiceFilter, formatFilter, languageFilter, stanceFilter, debouncedSearchQuery]);
+  }, [reviewStatusFilter, sortOrder, topicFilter, voiceFilter, formatFilter, languageFilter, stanceFilter, debouncedSearchQuery]);
 
   // Debounce search input to avoid firing on every keystroke
   useEffect(() => {
@@ -172,6 +186,17 @@ export default function AdminPage() {
 
   const handleStatusFilter = (status: string) => {
     setReviewStatusFilter(status);
+    setCurrentOffset(0);
+  };
+
+  const handleSortToggle = () => {
+    setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+    setCurrentOffset(0);
+  };
+
+  const handleLoadMore = () => {
+    const nextOffset = currentOffset + 50;
+    fetchDiscoveredSources(undefined, nextOffset, true);
   };
 
   // ── Review Actions ──────────────────────────────
@@ -189,7 +214,7 @@ export default function AdminPage() {
         const data = await res.json();
         throw new Error(data.error || "Action failed");
       }
-      await fetchDiscoveredSources();
+      await fetchDiscoveredSources(undefined, currentOffset);
     } catch (e: any) {
       setReviewError(e.message);
     } finally {
@@ -779,20 +804,22 @@ export default function AdminPage() {
           )}
 
           {/* Status filter */}
-          <div className="mb-4 flex gap-1 rounded-lg border border-zinc-800 bg-zinc-900 p-1 w-fit">
-            {(["all", "pending", "approved", "rejected", "parked"] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => handleStatusFilter(s)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors capitalize ${
-                  reviewStatusFilter === s
-                    ? "bg-white text-black"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="flex gap-1 rounded-lg border border-zinc-800 bg-zinc-900 p-1">
+              {(["all", "pending", "approved", "rejected", "parked"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => handleStatusFilter(s)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors capitalize ${
+                    reviewStatusFilter === s
+                      ? "bg-white text-black"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Facet filters */}
@@ -966,7 +993,13 @@ export default function AdminPage() {
                   <tr>
                     <th className="px-4 py-3 text-left font-medium">Name</th>
                     <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Feed</th>
-                    <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Discovered</th>
+                    <th
+                      className="px-4 py-3 text-left font-medium hidden md:table-cell cursor-pointer select-none hover:text-zinc-200 transition-colors"
+                      onClick={handleSortToggle}
+                      title={sortOrder === "desc" ? "Newest first — click for oldest first" : "Oldest first — click for newest first"}
+                    >
+                      Discovered {sortOrder === "desc" ? "↓" : "↑"}
+                    </th>
                     <th className="px-4 py-3 text-center font-medium">Status</th>
                     <th className="px-4 py-3 text-right font-medium">Actions</th>
                   </tr>
@@ -1080,6 +1113,24 @@ export default function AdminPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!reviewLoading && totalCount > 0 && (
+            <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+              <span>
+                Showing {discoveredSources.length > 0 ? currentOffset + 1 : 0}–{currentOffset + discoveredSources.length} of {totalCount}
+              </span>
+              {hasMore && (
+                <button
+                  onClick={handleLoadMore}
+                  disabled={reviewLoading}
+                  className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-zinc-100 hover:border-zinc-600 disabled:opacity-40 transition-colors"
+                >
+                  {reviewLoading ? "Loading…" : "Load more"}
+                </button>
+              )}
             </div>
           )}
         </div>

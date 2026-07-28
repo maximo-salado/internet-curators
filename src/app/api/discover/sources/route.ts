@@ -7,6 +7,7 @@ export async function GET(req: Request) {
   const status = searchParams.get("status") ?? "pending";
   const offset = Math.max(0, parseInt(searchParams.get("offset") ?? "0", 10) || 0);
   const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20));
+  const order = (searchParams.get("order") ?? "desc") === "asc" ? "asc" : "desc";
   const search = searchParams.get("search")?.trim() || null;
   const tags = searchParams.getAll("tag").filter(Boolean);
 
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
   let query = supabase
     .from("discovered_sources")
     .select("*", { count: "exact" })
-    .order("discovered_at", { ascending: false });
+    .order("discovered_at", { ascending: order === "asc" });
 
   // 1. Apply search filter (ILIKE on title and feed_url)
   if (search) {
