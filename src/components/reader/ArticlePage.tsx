@@ -29,6 +29,22 @@ function formatDate(dateStr: string): string {
   }
 }
 
+/** Extract the hostname (domain) from a URL string. */
+function getDomain(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.hostname;
+  } catch {
+    // If the URL doesn't have a protocol, try adding one
+    try {
+      const u = new URL(`https://${url}`);
+      return u.hostname;
+    } catch {
+      return "";
+    }
+  }
+}
+
 /** Strip all HTML tags from a string, preserving line breaks. */
 function stripHtml(html: string): string {
   // Use DOMPurify with no allowed tags to strip everything,
@@ -99,6 +115,13 @@ export function ArticlePage({ item }: ArticlePageProps) {
   }, [item.sourceId]);
 
   const articleRef = useRef<HTMLElement>(null);
+
+  const faviconUrl = useMemo(() => {
+    const domain = getDomain(sourceInfo?.site_url || item.sourceUrl || "");
+    return domain
+      ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
+      : "";
+  }, [sourceInfo?.site_url, item.sourceUrl]);
 
   // Hide images until they load; show alt text only on genuine failure
   useEffect(() => {
@@ -198,7 +221,7 @@ export function ArticlePage({ item }: ArticlePageProps) {
           </a>
         </div>
 
-        {/* Source Card */}
+        {/* Source Card — entire card is a link to the source site */}
         <div className="mt-6 border-t border-zinc-800 pt-6">
           {sourceLoading ? (
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 animate-pulse">
@@ -210,9 +233,26 @@ export function ArticlePage({ item }: ArticlePageProps) {
               </div>
             </div>
           ) : sourceInfo ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-              <h3 className="font-semibold text-zinc-200">
-                More from {sourceInfo.title || item.sourceTitle}
+            <a
+              href={sourceInfo.site_url || item.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 transition-colors hover:border-zinc-700 hover:bg-zinc-900"
+            >
+              <h3 className="flex items-center gap-2 font-semibold text-zinc-200">
+                {faviconUrl && (
+                  <img
+                    src={faviconUrl}
+                    alt=""
+                    width={16}
+                    height={16}
+                    className="h-4 w-4 rounded-sm shrink-0"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                )}
+                {sourceInfo.title || item.sourceTitle}
               </h3>
               {sourceInfo.description && (
                 <p className="mt-1 text-sm text-zinc-400 line-clamp-2">
@@ -224,22 +264,14 @@ export function ArticlePage({ item }: ArticlePageProps) {
                   {sourceInfo.tags.map((tag) => (
                     <span
                       key={tag.id}
-                      className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs text-zinc-400"
+                      className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400"
                     >
                       {tag.name}
                     </span>
                   ))}
                 </div>
               )}
-              <a
-                href={item.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-1 text-sm text-blue-400 transition-colors hover:text-blue-300"
-              >
-                Visit {sourceInfo.title || item.sourceTitle} →
-              </a>
-            </div>
+            </a>
           ) : null}
         </div>
       </div>

@@ -201,8 +201,7 @@ export default function SwipeStack({
   // -- layout ---------------------------------------------------------------
   return (
     <div
-      className="relative overflow-hidden"
-      style={{ touchAction: "pan-y" }}
+      className="relative"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
