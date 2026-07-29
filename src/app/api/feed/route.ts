@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { refreshStaleSources } from "@/lib/feed-refresher";
+import { estDateString } from "@/lib/dates";
 import { NextResponse } from "next/server";
 
 // ---- Types ----
@@ -86,7 +87,7 @@ export async function GET(req: Request) {
   const supabase = await createClient();
   const issueParam = searchParams.get("issue");
 
-  const todayUTC = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
+  const todayEST = estDateString(); // "YYYY-MM-DD" in EST
 
   // 1. Resolve the issue
   let issueQuery = supabase
@@ -102,7 +103,11 @@ export async function GET(req: Request) {
     }
     issueQuery = issueQuery.eq("issue_number", issueNumber);
   } else {
-    issueQuery = issueQuery.eq("date", todayUTC);
+    // Default: most recent published issue (survives midnight UTC rollover)
+    issueQuery = issueQuery
+      .eq("published", true)
+      .order("date", { ascending: false })
+      .limit(1);
   }
 
   const { data: issue } = await issueQuery.maybeSingle();
@@ -163,7 +168,7 @@ export async function GET(req: Request) {
         date: issue.date,
         count: 0,
         origin: issue.origin,
-        isToday: issue.date === todayUTC,
+        isToday: issue.date === todayEST,
         published: issue.published,
       },
       items: [],
@@ -221,7 +226,7 @@ export async function GET(req: Request) {
       date: issue.date,
       count: withTags.length,
       origin: issue.origin,
-      isToday: issue.date === todayUTC,
+      isToday: issue.date === todayEST,
       published: issue.published,
     } satisfies IssueResponse,
     items: withTags,
