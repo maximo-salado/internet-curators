@@ -84,6 +84,24 @@ export async function GET(req: Request) {
     return handleCronRefresh(req);
   }
 
+  // Lightweight poll: just the latest published issue number.
+  // Uncached so midnight drops are visible immediately (the full feed
+  // response is CDN-cached for an hour and must not be used for polling).
+  if (searchParams.get("latest") === "1") {
+    const supabase = await createClient();
+    const { data: latestRow } = await supabase
+      .from("issues")
+      .select("issue_number")
+      .eq("published", true)
+      .order("issue_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return NextResponse.json(
+      { latestNumber: latestRow?.issue_number ?? 0 },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const supabase = await createClient();
   const issueParam = searchParams.get("issue");
 
@@ -113,10 +131,20 @@ export async function GET(req: Request) {
   const { data: issue } = await issueQuery.maybeSingle();
 
   if (!issue) {
-    return NextResponse.json({ issue: null, items: [] }, {
+    return NextResponse.json({ issue: null, items: [], latestNumber: 0 }, {
       headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
     });
   }
+
+  // 1b. Query the latest published issue number (for forward navigation bar)
+  const { data: latestRow } = await supabase
+    .from("issues")
+    .select("issue_number")
+    .eq("published", true)
+    .order("issue_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const latestNumber = latestRow?.issue_number ?? issue.issue_number ?? 0;
 
   // 2. Load issue articles ordered by position, join articles + sources
   const { data: issueRows } = await supabase
@@ -172,6 +200,7 @@ export async function GET(req: Request) {
         published: issue.published,
       },
       items: [],
+      latestNumber,
     }, {
       headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
     });
@@ -230,6 +259,7 @@ export async function GET(req: Request) {
       published: issue.published,
     } satisfies IssueResponse,
     items: withTags,
+    latestNumber,
   }, {
     headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
   });
