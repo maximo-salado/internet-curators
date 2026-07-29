@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireAdmin } from "@/lib/admin-auth";
+import { estDateString } from "@/lib/dates";
 import { NextResponse } from "next/server";
 
 export async function GET(req: Request) {
@@ -12,13 +13,13 @@ export async function GET(req: Request) {
 
   const supabase = await createClient();
 
-  // Parse date or default to today UTC
+  // Parse date or default to today EST
   let targetDate: string;
   if (dateParam) {
     // Accept yyyy-mm-dd
     targetDate = dateParam;
   } else {
-    targetDate = new Date().toISOString().slice(0, 10);
+    targetDate = estDateString();
   }
 
   // 1. Get the issue for this date
@@ -88,7 +89,7 @@ export async function PATCH(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const dateParam = searchParams.get("date");
-  const targetDate = dateParam || new Date().toISOString().slice(0, 10);
+  const targetDate = dateParam || estDateString();
 
   let body: {
     action: "reorder" | "remove" | "add" | "publish";
