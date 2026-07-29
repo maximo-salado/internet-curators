@@ -1,9 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import SwipeStack from "@/components/reader/SwipeStack";
+import BottomBar from "@/components/reader/BottomBar";
 import { composePages } from "@/lib/compose-pages";
 import type { Page, FeedItem } from "@/lib/compose-pages";
+import {
+  bookmarkSignature,
+  setDismissedBookmark,
+  getDismissedBookmark,
+  setDismissedForward,
+  getDismissedForward,
+} from "@/lib/reader-bookmark";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -28,6 +36,7 @@ interface IssueResponse {
 interface FeedResponse {
   issue: IssueResponse | null;
   items: FeedItem[];
+  latestNumber: number;
 }
 
 type Status = "loading" | "empty" | "error" | "ready";
@@ -78,6 +87,21 @@ export default function IssueReader({
   const [status, setStatus] = useState<Status>("loading");
   const [errorMessage, setErrorMessage] = useState("");
 
+  // ---- Bottom bar state ----
+  const [showForwardBar, setShowForwardBar] = useState(false);
+  const [forwardLatest, setForwardLatest] = useState(0);
+  const [showBookmarkBar, setShowBookmarkBar] = useState(false);
+  const [bookmarkResume, setBookmarkResume] = useState<ResumeData | null>(null);
+
+  // Refs for the poll handler (avoids stale closures in event listeners)
+  const issueNumberRef = useRef<number | null>(null);
+  issueNumberRef.current = issueNumber;
+  const showForwardBarRef = useRef(false);
+  showForwardBarRef.current = showForwardBar;
+
+  const lastPollRef = useRef(0);       // throttle timestamp
+  const pollingRef = useRef(false);    // in-flight guard
+
   // ---- Fetch & compose on mount ----
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +138,8 @@ export default function IssueReader({
         const pageParam = new URL(
           window.location.href,
         ).searchParams.get("page");
+        const hasPageParam = pageParam != null;
+
         if (pageParam != null) {
           const parsed = parseInt(pageParam, 10);
           if (!isNaN(parsed) && parsed > 0) {
@@ -125,6 +151,34 @@ export default function IssueReader({
             resumeIndex = saved.index;
           }
         }
+
+        // ---- Bottom bar logic ----
+        // Forward bar: newer issue exists, not dismissed
+        const showForward =
+          data.issue != null &&
+          data.latestNumber > data.issue.number &&
+          getDismissedForward() !== data.latestNumber;
+
+        setForwardLatest(data.latestNumber);
+        setShowForwardBar(showForward);
+
+        // Bookmark bar: only on root, no ?page=, saved resume from different
+        // issue, and not dismissed. Forward bar suppresses bookmark bar.
+        let showBookmark = false;
+        let bkResume: ResumeData | null = null;
+
+        if (!showForward && propIssueNumber == null && !hasPageParam) {
+          const saved = loadResumeData();
+          if (saved && saved.issueNumber !== data.issue.number) {
+            const sig = bookmarkSignature(saved);
+            if (sig !== getDismissedBookmark()) {
+              showBookmark = true;
+              bkResume = saved;
+            }
+          }
+        }
+        setShowBookmarkBar(showBookmark);
+        setBookmarkResume(bkResume);
 
         setPages(composedPages);
         setStartIndex(resumeIndex);
@@ -148,15 +202,69 @@ export default function IssueReader({
     };
   }, []);
 
-  // ---- Save progress on index change (today's issue only) ----
+  // ---- Save progress on index change (article pages only) ----
   const handleIndexChange = useCallback(
     (index: number) => {
-      if (issueNumber !== null && propIssueNumber == null) {
+      if (
+        issueNumber !== null &&
+        pages[index]?.type === "article"
+      ) {
         saveResumeData({ issueNumber, index });
       }
     },
-    [issueNumber, propIssueNumber],
+    [issueNumber, pages],
   );
+
+  // ---- Midnight-drop poll: detect new issue on focus/visibility ----
+  const POLL_THROTTLE_MS = 60_000;
+
+  const pollLatest = useCallback(async () => {
+    // Only poll when the bar is not already showing and we have a loaded issue.
+    if (showForwardBarRef.current) return;
+    const current = issueNumberRef.current;
+    if (current == null) return;
+    if (pollingRef.current) return;
+
+    const now = Date.now();
+    if (now - lastPollRef.current < POLL_THROTTLE_MS) return;
+    lastPollRef.current = now;
+    pollingRef.current = true;
+
+    try {
+      const res = await fetch("/api/feed?latest=1", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const latest = data.latestNumber;
+      if (
+        typeof latest === "number" &&
+        latest > current &&
+        getDismissedForward() !== latest
+      ) {
+        setForwardLatest(latest);
+        setShowForwardBar(true);
+        setShowBookmarkBar(false); // forward bar suppresses the bookmark bar
+      }
+    } catch {
+      // network error — ignore, try again on next focus
+    } finally {
+      pollingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") pollLatest();
+    };
+    const onFocus = () => pollLatest();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("pageshow", onFocus); // bfcache restore (mobile Safari)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pageshow", onFocus);
+    };
+  }, [pollLatest]);
 
   // ---- Render: loading ----
   if (status === "loading") {
@@ -194,12 +302,43 @@ export default function IssueReader({
 
   // ---- Render: ready ----
   return (
-    <SwipeStack
-      pages={pages}
-      startIndex={startIndex}
-      onIndexChange={handleIndexChange}
-      issueNumber={issueNumber ?? 0}
-      issueDate={issueDate}
-    />
+    <>
+      {/* Forward bar — "newer issue available" */}
+      {showForwardBar && (
+        <BottomBar
+          label={`Issue #${forwardLatest} is out →`}
+          onTap={() => {
+            window.location.href = "/";
+          }}
+          onDismiss={() => {
+            setDismissedForward(forwardLatest);
+            setShowForwardBar(false);
+          }}
+        />
+      )}
+
+      {/* Bookmark bar — "resume where you left off" (only if forward bar not shown) */}
+      {showBookmarkBar && bookmarkResume && (
+        <BottomBar
+          label={`You were at Issue #${bookmarkResume.issueNumber}, page ${bookmarkResume.index + 1}`}
+          onTap={() => {
+            window.location.href = `/issue/${bookmarkResume.issueNumber}?page=${bookmarkResume.index + 1}`;
+          }}
+          onDismiss={() => {
+            setDismissedBookmark(bookmarkSignature(bookmarkResume));
+            setShowBookmarkBar(false);
+          }}
+        />
+      )}
+
+      <SwipeStack
+        pages={pages}
+        startIndex={startIndex}
+        onIndexChange={handleIndexChange}
+        issueNumber={issueNumber ?? 0}
+        issueDate={issueDate}
+        bottomOffset={showForwardBar || showBookmarkBar}
+      />
+    </>
   );
 }

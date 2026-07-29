@@ -32,6 +32,7 @@ interface SwipeStackProps {
   onIndexChange?: (index: number) => void;
   issueNumber: number;
   issueDate: string;
+  bottomOffset?: boolean; // shift footer + gradient up for BottomBar
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,7 @@ export default function SwipeStack({
   onIndexChange,
   issueNumber,
   issueDate,
+  bottomOffset = false,
 }: SwipeStackProps) {
   // -- local state --
   const [selectedIndex, setSelectedIndex] = useState(startIndex);
@@ -116,7 +118,7 @@ export default function SwipeStack({
 
       {/* Gradient overlays */}
       <div className="pointer-events-none fixed top-0 inset-x-0 z-30 h-20 bg-gradient-to-b from-black/90 to-transparent" />
-      <div className="pointer-events-none fixed bottom-0 inset-x-0 z-30 h-20 bg-gradient-to-t from-black/90 to-transparent" />
+      <div className={`pointer-events-none fixed inset-x-0 z-30 h-20 bg-gradient-to-t from-black/90 to-transparent ${bottomOffset ? "bottom-12" : "bottom-0"}`} />
 
       {/* Header */}
       <header className="fixed top-0 inset-x-0 z-40 h-14 flex items-center justify-between px-4">
@@ -152,7 +154,7 @@ export default function SwipeStack({
       )}
 
       {/* Footer */}
-      <footer className="fixed bottom-0 inset-x-0 z-40 h-14 flex items-center justify-between px-6">
+            <footer className={`fixed inset-x-0 z-40 flex items-center justify-between px-6 h-14 ${bottomOffset ? "bottom-12" : "bottom-0"}`}>
         <button
           onClick={() => swiperRef.current?.slidePrev()}
           className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800/60 text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
