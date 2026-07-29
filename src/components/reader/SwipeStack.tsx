@@ -99,6 +99,19 @@ export default function SwipeStack({
         onSlideChange={(swiper) => {
           setSelectedIndex(swiper.activeIndex);
           onIndexChange?.(swiper.activeIndex);
+
+          if (
+            swiper.activeIndex === pages.length - 1 &&
+            pages[pages.length - 1]?.type === "closing"
+          ) {
+            try {
+              localStorage.setItem(
+                `rssmag-completed-${issueNumber}`,
+                "true"
+              );
+            } catch {
+            }
+          }
         }}
         onSwiper={(swiper) => {
           swiperRef.current = swiper;
