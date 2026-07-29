@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import { estDateString } from "@/lib/dates";
 import { NextResponse } from "next/server";
 
 interface ArticleRow {
@@ -21,8 +22,8 @@ function formatDate(d: Date): string {
 async function snapshotLogic() {
   const supabase = createServiceClient();
 
-  // 1. Compute today's UTC date
-  const p_date = formatDate(new Date());
+  // 1. Compute today's EST date
+  const p_date = estDateString();
 
   // 2. Get blacklisted feed URLs
   const { data: blacklisted } = await supabase
