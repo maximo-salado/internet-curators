@@ -186,7 +186,8 @@ export async function refreshStaleSources(sources: RefreshSource[]): Promise<voi
           .from("sources")
           .update({ last_fetched_at: new Date().toISOString() })
           .eq("id", source.id);
-      } catch {
+      } catch (err: any) {
+        console.error(`[feed-refresher] Failed ${source.feed_url}: ${err?.message ?? err}`);
         // Mark as fetched anyway to avoid hammering dead feeds on every request
         await serviceClient
           .from("sources")
