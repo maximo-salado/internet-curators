@@ -63,6 +63,13 @@ export default function IssueShelf() {
   const isFirstWeek = currentWeekIdx === 0;
   const isLastWeek = currentWeekIdx === weeks.length - 1;
 
+  const heroIdx = (() => {
+    const withImage = currentWeek.days.findIndex((d) => d.issue && d.issue.leadImage);
+    if (withImage !== -1) return withImage;
+    const withIssue = currentWeek.days.findIndex((d) => d.issue);
+    return withIssue !== -1 ? withIssue : 0;
+  })();
+
   return (
     <div className="flex flex-col h-full w-full bg-black text-zinc-100">
       <div className="px-4 pt-14 pb-3 flex items-center">
@@ -87,14 +94,14 @@ export default function IssueShelf() {
           {currentWeek.weekLabel}
         </h2>
       </div>
-
-      <div className="flex-1 px-4 pb-20">
-        <div className="grid grid-cols-2 gap-2 auto-rows-fr">
+      {/* Grid — 2 columns, Monday hero spans 2 rows */}
+      <div className="flex-1 px-4 pb-4 min-h-0">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 h-full" style={{ gridTemplateRows: "1fr 1fr 1fr 1fr" }}>
           {currentWeek.days.map((day, idx) => (
             <CoverCard
               key={day.date}
               day={day}
-              isHero={idx === 0}
+              isHero={idx === heroIdx}
               isFinished={day.issue ? isFinished(day.issue.number) : false}
             />
           ))}

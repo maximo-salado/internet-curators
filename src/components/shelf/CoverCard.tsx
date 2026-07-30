@@ -13,15 +13,16 @@ export default function CoverCard({ day, isHero, isFinished }: CoverCardProps) {
   const router = useRouter();
   const { issue, label, isToday, isFuture } = day;
 
+  // Gap cell — no issue published on this day
   if (!issue) {
     return (
       <div
-        className={`flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-800/50 bg-zinc-950/30 min-h-[90px] ${
+        className={`flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-800/60 ${
           isHero ? "row-span-2" : ""
-        } ${isFuture ? "opacity-20" : "opacity-40"}`}
+        } opacity-60`}
       >
-        <span className="text-xs text-zinc-600">{label}</span>
-        <span className="text-[10px] text-zinc-700">
+        <span className="text-xs text-zinc-500">{label}</span>
+        <span className="text-[10px] text-zinc-500">
           {isFuture ? "—" : "no issue"}
         </span>
       </div>
@@ -41,6 +42,7 @@ export default function CoverCard({ day, isHero, isFinished }: CoverCardProps) {
         }
         hover:border-zinc-600`}
     >
+      {/* Lead image background */}
       {issue.leadImage ? (
         <img
           src={issue.leadImage}
@@ -49,9 +51,9 @@ export default function CoverCard({ day, isHero, isFinished }: CoverCardProps) {
           loading="lazy"
         />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center justify-center bg-zinc-800">
           <span
-            className={`font-serif font-bold text-zinc-800/40 select-none ${
+            className={`font-serif font-bold text-zinc-600 select-none ${
               isHero ? "text-7xl" : "text-4xl"
             }`}
           >
@@ -62,10 +64,12 @@ export default function CoverCard({ day, isHero, isFinished }: CoverCardProps) {
         </div>
       )}
 
+      {/* Day label */}
       <span className="absolute top-1.5 left-2 text-[10px] font-medium text-zinc-500 uppercase">
         {label}
       </span>
 
+      {/* Content */}
       <div className="relative z-10 flex flex-col items-center gap-1 pb-3 px-2">
         <span
           className={`font-serif font-bold ${
@@ -81,10 +85,12 @@ export default function CoverCard({ day, isHero, isFinished }: CoverCardProps) {
         </span>
       </div>
 
+      {/* Today indicator */}
       {isToday && (
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-600/60 rounded-b-lg" />
       )}
 
+      {/* Finished indicator */}
       {isFinished && !isToday && (
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-700/30 rounded-b-lg" />
       )}
