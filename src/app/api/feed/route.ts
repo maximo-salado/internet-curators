@@ -274,7 +274,7 @@ async function handleCronRefresh(req: Request) {
   if (!secret || authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: sources, error } = await supabase
     .from("sources")
@@ -282,7 +282,8 @@ async function handleCronRefresh(req: Request) {
     .eq("hidden", false);
 
   if (error || !sources?.length) {
-    return NextResponse.json({ refreshed: 0 });
+    console.error(`[cron-refresh] Failed to load sources: ${error?.message ?? 'no sources found'}`);
+    return NextResponse.json({ refreshed: 0, reason: error ? 'query_error' : 'no_sources' });
   }
 
   // Filter out blacklisted feed URLs (use service client since RLS blocks user reads)
