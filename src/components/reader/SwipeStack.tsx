@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Keyboard } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
@@ -8,9 +8,8 @@ import type { Page } from "@/lib/compose-pages";
 import {
   CaretLeft,
   CaretRight,
-  List,
-  Check,
-  Share,
+  SquaresFour,
+  DotsThree,
 } from "@phosphor-icons/react";
 import CoverPage from "@/components/reader/CoverPage";
 import { ContextPage } from "@/components/reader/ContextPage";
@@ -51,15 +50,6 @@ export default function SwipeStack({
   const [selectedIndex, setSelectedIndex] = useState(startIndex);
   const [tocOpen, setTocOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
-
-  // -- share state --
-  const [copied, setCopied] = useState(false);
-
-  const handleShare = useCallback(async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, []);
 
   // -- sync URL on slide change --
   useEffect(() => {
@@ -135,13 +125,13 @@ export default function SwipeStack({
 
       {/* Header */}
       <header className="fixed top-0 inset-x-0 z-40 h-14 flex items-center justify-between px-4">
-        <button
-          onClick={() => setNavOpen(true)}
-          className="text-zinc-300 hover:text-white transition-colors"
-          aria-label="Open navigation"
+        <a
+          href="/issues"
+          className="flex h-10 w-10 items-center justify-center text-zinc-300 hover:text-white transition-colors"
+          aria-label="Back to shelf"
         >
-          <List size={20} />
-        </button>
+          <SquaresFour size={20} />
+        </a>
         <button
           onClick={() => setTocOpen(true)}
           className="flex items-center gap-1 text-sm text-zinc-300 hover:text-white transition-colors"
@@ -151,20 +141,13 @@ export default function SwipeStack({
           <span className="text-zinc-400">#{issueNumber}</span>
         </button>
         <button
-          onClick={handleShare}
+          onClick={() => setNavOpen(true)}
           className="text-zinc-300 hover:text-white transition-colors"
-          aria-label="Copy link to share"
+          aria-label="Open navigation"
         >
-          {copied ? <Check size={18} /> : <Share size={18} />}
+          <DotsThree size={20} />
         </button>
       </header>
-
-      {/* Copied toast */}
-      {copied && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 text-xs text-white bg-zinc-800/90 px-3 py-1.5 rounded-full backdrop-blur">
-          Copied to clipboard
-        </div>
-      )}
 
       {/* Footer */}
             <footer className={`fixed inset-x-0 z-40 flex items-center justify-between px-6 h-14 ${bottomOffset ? "bottom-12" : "bottom-0"}`}>
