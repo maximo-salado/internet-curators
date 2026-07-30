@@ -4,7 +4,7 @@ export default function ReaderLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="h-[100dvh] bg-black text-zinc-100">
+    <div className="fixed inset-0 bg-black text-zinc-100">
       {children}
     </div>
   );
