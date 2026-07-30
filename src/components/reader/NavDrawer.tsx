@@ -82,14 +82,6 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
 
           {/* Nav links */}
           <div className="flex-1 px-5 py-5 space-y-5">
-            {/* Previous Issues */}
-            <a
-              href="/issues"
-              className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
-            >
-              Previous issues
-            </a>
-
             {/* About RSSMag */}
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2">
