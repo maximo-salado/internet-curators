@@ -1,85 +1,90 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import type { DaySlot } from "@/lib/weeks";
 
 interface CoverCardProps {
-  number: number;
-  date: string; // "Jul 29"
-  count: number;
-  leadImage: string | null;
-  isToday: boolean;
+  day: DaySlot;
+  isHero: boolean;
   isFinished: boolean;
 }
 
-export default function CoverCard({
-  number,
-  date,
-  count,
-  leadImage,
-  isToday,
-  isFinished,
-}: CoverCardProps) {
+export default function CoverCard({ day, isHero, isFinished }: CoverCardProps) {
   const router = useRouter();
+  const { issue, label, isToday, isFuture } = day;
+
+  if (!issue) {
+    return (
+      <div
+        className={`flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-800/50 bg-zinc-950/30 min-h-[90px] ${
+          isHero ? "row-span-2" : ""
+        } ${isFuture ? "opacity-20" : "opacity-40"}`}
+      >
+        <span className="text-xs text-zinc-600">{label}</span>
+        <span className="text-[10px] text-zinc-700">
+          {isFuture ? "—" : "no issue"}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <button
-      onClick={() => router.push(`/issue/${number}`)}
-      className={`relative flex flex-col items-center justify-end w-full h-[210px] rounded-lg border transition-all ${
-        isToday
+      onClick={() => router.push(`/issue/${issue.number}`)}
+      className={`relative flex flex-col items-center justify-end w-full rounded-lg border transition-all overflow-hidden
+        ${isHero ? "row-span-2" : ""}
+        ${isToday
           ? "border-amber-600/50 bg-zinc-900"
           : isFinished
-          ? "border-zinc-700/80 bg-zinc-900/90"
-          : "border-zinc-800/60 bg-zinc-950/50 opacity-80"
-      } hover:border-zinc-600 hover:opacity-100`}
+          ? "border-amber-700/30 bg-zinc-900/80"
+          : "border-zinc-800/60 bg-zinc-950"
+        }
+        hover:border-zinc-600`}
     >
-      {/* Lead image background — fills the card, text overlays */}
-      {leadImage ? (
+      {issue.leadImage ? (
         <img
-          src={leadImage}
+          src={issue.leadImage}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover rounded-lg opacity-30"
+          className="absolute inset-0 w-full h-full object-cover opacity-25"
           loading="lazy"
         />
       ) : (
-        /* Typographic fallback — subtle pattern or just the number */
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-6xl font-serif font-bold text-zinc-800 select-none">
-            #{typeof number === "number" && number % 1 !== 0
-              ? number.toFixed(1)
-              : number}
+          <span
+            className={`font-serif font-bold text-zinc-800/40 select-none ${
+              isHero ? "text-7xl" : "text-4xl"
+            }`}
+          >
+            #{typeof issue.number === "number" && issue.number % 1 !== 0
+              ? issue.number.toFixed(1)
+              : issue.number}
           </span>
         </div>
       )}
 
-      {/* Content overlay */}
-      <div className="relative z-10 flex flex-col items-center gap-1.5 pb-4 px-3">
-        {/* Issue number */}
+      <span className="absolute top-1.5 left-2 text-[10px] font-medium text-zinc-500 uppercase">
+        {label}
+      </span>
+
+      <div className="relative z-10 flex flex-col items-center gap-1 pb-3 px-2">
         <span
-          className={`text-lg font-serif font-bold ${
-            isFinished ? "text-zinc-200" : "text-zinc-400"
-          }`}
+          className={`font-serif font-bold ${
+            isHero ? "text-xl" : "text-sm"
+          } ${isFinished ? "text-zinc-200" : "text-zinc-400"}`}
         >
-          #{typeof number === "number" && number % 1 !== 0
-            ? number.toFixed(1)
-            : number}
+          #{typeof issue.number === "number" && issue.number % 1 !== 0
+            ? issue.number.toFixed(1)
+            : issue.number}
         </span>
-
-        {/* Date */}
-        <span className="text-xs text-zinc-500">{date}</span>
-
-        {/* Article count + action label */}
-        <span className="text-[10px] text-zinc-600">
-          {count} {count === 1 ? "article" : "articles"}
-          {isFinished ? " · revisit" : ""}
+        <span className="text-[10px] text-zinc-500">
+          {issue.count} {issue.count === 1 ? "art" : "arts"}
         </span>
       </div>
 
-      {/* Today indicator — subtle amber line at bottom */}
       {isToday && (
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-600/60 rounded-b-lg" />
       )}
 
-      {/* Finished indicator — warm line above the today line if both */}
       {isFinished && !isToday && (
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-700/30 rounded-b-lg" />
       )}

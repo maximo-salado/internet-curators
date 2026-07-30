@@ -1,48 +1,28 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-interface IssueResponse {
+export interface IssueSummary {
   number: number;
   date: string;
   count: number;
   leadImage: string | null;
 }
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
-
-  if (!from || !to) {
-    return NextResponse.json(
-      { error: "from and to query params required (YYYY-MM-DD)" },
-      { status: 400 }
-    );
-  }
-
+export async function GET() {
   const supabase = await createClient();
 
   const { data: issues, error } = await supabase
     .from("issues")
-    .select("id, issue_number, date, published")
+    .select("id, issue_number, date")
     .eq("published", true)
-    .gte("date", from)
-    .lte("date", to)
-    .order("date", { ascending: true });
+    .order("date", { ascending: false });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   if (!issues || issues.length === 0) {
     return NextResponse.json(
       { issues: [] },
-      {
-        headers: {
-          "Cache-Control":
-            "public, s-maxage=3600, stale-while-revalidate=86400",
-        },
-      }
+      { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } }
     );
   }
 
@@ -54,8 +34,7 @@ export async function GET(req: Request) {
       .from("issue_articles")
       .select("issue_id, articles(image)")
       .in("issue_id", issueIds)
-      .order("position", { ascending: true })
-      .limit(1, { foreignTable: "issue_articles" }),
+      .order("position", { ascending: true }),
   ]);
 
   const countMap = new Map<string, number>();
@@ -71,7 +50,7 @@ export async function GET(req: Request) {
     }
   }
 
-  const result: IssueResponse[] = issues.map((issue) => ({
+  const result: IssueSummary[] = issues.map((issue) => ({
     number: issue.issue_number,
     date: issue.date,
     count: countMap.get(issue.id) ?? 0,
@@ -80,11 +59,6 @@ export async function GET(req: Request) {
 
   return NextResponse.json(
     { issues: result },
-    {
-      headers: {
-        "Cache-Control":
-          "public, s-maxage=3600, stale-while-revalidate=86400",
-      },
-    }
+    { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } }
   );
 }
