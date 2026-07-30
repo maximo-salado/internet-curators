@@ -122,7 +122,7 @@ export default function SwipeStack({
         spaceBetween={0}
         slidesPerView={1}
         keyboard={{ enabled: true }}
-        style={{ height: "100dvh", width: "100%" }}
+        style={{ height: "100%", width: "100%" }}
       >
         {pages.map((page, i) => (
           <SwiperSlide key={i}>{renderPage(page)}</SwiperSlide>
