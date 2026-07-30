@@ -1,16 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import useEmblaCarousel from "embla-carousel-react";
+import { useState, useEffect } from "react";
 import CoverCard from "./CoverCard";
-import { weekRangeFor } from "@/lib/weeks";
-
-interface IssueSummary {
-  number: number;
-  date: string;
-  count: number;
-  leadImage: string | null;
-}
+import { groupIssuesByWeek, getMonthOptions, type WeekGroup } from "@/lib/weeks";
+import type { IssueSummary } from "@/app/api/issues/route";
+import { CaretDown, CaretLeft, CaretRight } from "@phosphor-icons/react";
 
 function isFinished(issueNumber: number): boolean {
   try {
@@ -20,76 +14,31 @@ function isFinished(issueNumber: number): boolean {
   }
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-/**
- * Get the date range covering roughly 3 months back from today,
- * so the shelf always shows ~90 days of issues.
- */
-function shelfDateRange(): { from: string; to: string } {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const to = today.toISOString().slice(0, 10);
-  const from = new Date(today);
-  from.setDate(from.getDate() - 90);
-  return { from: from.toISOString().slice(0, 10), to };
-}
-
 export default function IssueShelf() {
-  const [issues, setIssues] = useState<
-    (IssueSummary & { isToday: boolean; isFinished: boolean })[]
-  >([]);
+  const [weeks, setWeeks] = useState<WeekGroup[]>([]);
+  const [currentWeekIdx, setCurrentWeekIdx] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [weekLabel, setWeekLabel] = useState("");
-
-  const [emblaRef, emblaApi] = useEmblaCarousel({
-    align: "end", // newest on the right
-    containScroll: "trimSnaps",
-    dragFree: false,
-    slidesToScroll: 1,
-  });
-
-  const updateWeekLabel = useCallback(() => {
-    if (!emblaApi || issues.length === 0) return;
-    const idx = emblaApi.selectedScrollSnap();
-    const issue = issues[idx];
-    if (issue) {
-      const range = weekRangeFor(new Date(issue.date + "T00:00:00"));
-      setWeekLabel(range.label);
-    }
-  }, [emblaApi, issues]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!emblaApi) return;
-    emblaApi.on("select", updateWeekLabel);
-    updateWeekLabel();
-    return () => {
-      emblaApi.off("select", updateWeekLabel);
-    };
-  }, [emblaApi, updateWeekLabel]);
-
-  useEffect(() => {
-    const { from, to } = shelfDateRange();
-    fetch(`/api/issues?from=${from}&to=${to}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const today = new Date().toISOString().slice(0, 10);
-        const mapped = (data.issues ?? []).map((i: IssueSummary) => ({
-          ...i,
-          isToday: i.date === today,
-          isFinished: isFinished(i.number),
-        }));
-        setIssues(mapped);
+    fetch("/api/issues")
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
       })
-      .catch(() => setIssues([]))
+      .then((data) => {
+        const grouped = groupIssuesByWeek(data.issues as IssueSummary[]);
+        setWeeks(grouped);
+        setCurrentWeekIdx(grouped.length - 1);
+      })
+      .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleMonthChange = (monthLabel: string) => {
+    const idx = weeks.findIndex((w) => w.monthLabel === monthLabel);
+    if (idx !== -1) setCurrentWeekIdx(idx);
+  };
 
   if (loading) {
     return (
@@ -99,46 +48,77 @@ export default function IssueShelf() {
     );
   }
 
-  if (issues.length === 0) {
+  if (error || weeks.length === 0) {
     return (
       <div className="flex h-full items-center justify-center bg-black px-4">
-        <p className="text-zinc-500 text-sm text-center max-w-xs">
-          Nothing here yet. The first issue is brewing.
+        <p className="text-zinc-500 text-sm text-center">
+          {error || "Nothing here yet. The first issue is brewing."}
         </p>
       </div>
     );
   }
 
+  const currentWeek = weeks[currentWeekIdx];
+  const monthOptions = getMonthOptions(weeks);
+  const isFirstWeek = currentWeekIdx === 0;
+  const isLastWeek = currentWeekIdx === weeks.length - 1;
+
   return (
     <div className="flex flex-col h-full w-full bg-black text-zinc-100">
-      {/* Week label */}
-      <div className="px-4 pt-16 pb-3">
+      <div className="px-4 pt-14 pb-3 flex items-center">
+        <div className="relative inline-flex items-center gap-1">
+          <select
+            value={currentWeek.monthLabel}
+            onChange={(e) => handleMonthChange(e.target.value)}
+            className="appearance-none bg-transparent text-sm text-zinc-400 border border-zinc-800 rounded-md px-3 py-1.5 pr-7 focus:outline-none focus:border-zinc-600 cursor-pointer"
+          >
+            {monthOptions.map((month) => (
+              <option key={month} value={month} className="bg-zinc-900 text-zinc-300">
+                {month}
+              </option>
+            ))}
+          </select>
+          <CaretDown size={12} weight="bold" className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+        </div>
+      </div>
+
+      <div className="px-4 pb-3">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-          {weekLabel}
+          {currentWeek.weekLabel}
         </h2>
       </div>
 
-      {/* Carousel */}
-      <div className="flex-1 flex items-center">
-        <div className="overflow-hidden w-full" ref={emblaRef}>
-          <div className="flex gap-3 pl-4">
-            {issues.map((entry) => (
-              <div
-                key={entry.number}
-                className="flex-[0_0_150px] min-w-0"
-              >
-                <CoverCard
-                  number={entry.number}
-                  date={formatDate(entry.date)}
-                  count={entry.count}
-                  leadImage={entry.leadImage}
-                  isToday={entry.isToday}
-                  isFinished={entry.isFinished}
-                />
-              </div>
-            ))}
-          </div>
+      <div className="flex-1 px-4 pb-20">
+        <div className="grid grid-cols-2 gap-2 auto-rows-fr">
+          {currentWeek.days.map((day, idx) => (
+            <CoverCard
+              key={day.date}
+              day={day}
+              isHero={idx === 0}
+              isFinished={day.issue ? isFinished(day.issue.number) : false}
+            />
+          ))}
         </div>
+      </div>
+
+      <div className="px-4 pb-6 flex items-center justify-between">
+        <button
+          onClick={() => setCurrentWeekIdx((prev) => Math.max(0, prev - 1))}
+          disabled={isFirstWeek}
+          className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-30 disabled:cursor-default transition-colors"
+        >
+          <CaretLeft size={14} />
+          Older
+        </button>
+        <span className="text-xs text-zinc-600">{currentWeek.monthLabel}</span>
+        <button
+          onClick={() => setCurrentWeekIdx((prev) => Math.min(weeks.length - 1, prev + 1))}
+          disabled={isLastWeek}
+          className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-30 disabled:cursor-default transition-colors"
+        >
+          Newer
+          <CaretRight size={14} />
+        </button>
       </div>
     </div>
   );

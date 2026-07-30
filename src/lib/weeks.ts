@@ -1,57 +1,95 @@
-/**
- * Get the Monday of the week containing the given date.
- * Weeks start on Monday.
- */
-export function mondayOf(date: Date): Date {
+import type { IssueSummary } from "@/app/api/issues/route";
+
+export interface DaySlot {
+  date: string;
+  label: string;
+  issue: IssueSummary | null;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
+export interface WeekGroup {
+  weekStart: string;
+  days: DaySlot[];
+  monthLabel: string;
+  weekLabel: string;
+}
+
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function mondayOf(date: Date): Date {
   const d = new Date(date);
-  const day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
-/**
- * Format a Date to YYYY-MM-DD.
- */
-export function fmtDate(date: Date): string {
+function fmtDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/**
- * Given a date, return the start (Monday) and end (Sunday) of its week,
- * plus a natural-language label.
- */
-export function weekRangeFor(
-  date: Date
-): { from: string; to: string; label: string } {
+function addDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+export function groupIssuesByWeek(issues: IssueSummary[]): WeekGroup[] {
+  if (issues.length === 0) return [];
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todayStr = fmtDate(today);
 
-  const monday = mondayOf(date);
-  const sunday = new Date(monday);
-  sunday.setDate(sunday.getDate() + 6);
+  const issueMap = new Map<string, IssueSummary>();
+  for (const issue of issues) issueMap.set(issue.date, issue);
 
-  const thisMonday = mondayOf(today);
+  const dates = issues.map((i) => i.date).sort();
+  const earliest = dates[0];
+  const latest = dates[dates.length - 1];
 
-  const diffWeeks = Math.round(
-    (thisMonday.getTime() - monday.getTime()) / (7 * 24 * 60 * 60 * 1000)
-  );
+  const startMonday = mondayOf(new Date(earliest + "T00:00:00"));
+  const currentMonday = mondayOf(today);
 
-  let label: string;
-  if (diffWeeks === 0) {
-    label = "This week";
-  } else if (diffWeeks === 1) {
-    label = "Last week";
-  } else {
-    const month = monday.toLocaleDateString("en-US", { month: "short" });
-    const day = monday.getDate();
-    label = `Week of ${month} ${day}`;
+  const weeks: WeekGroup[] = [];
+  let mon = new Date(currentMonday);
+
+  while (mon >= startMonday) {
+    const days: DaySlot[] = [];
+
+    for (let i = 0; i < 7; i++) {
+      const dayDate = addDays(mon, i);
+      const dateStr = fmtDate(dayDate);
+      const issue = issueMap.get(dateStr) ?? null;
+      const isFuture = dateStr > todayStr;
+      const isToday = dateStr === todayStr;
+
+      days.push({ date: dateStr, label: DAY_LABELS[i], issue, isToday, isFuture });
+    }
+
+    const weekEnd = addDays(mon, 6);
+    weeks.push({
+      weekStart: fmtDate(mon),
+      days,
+      monthLabel: mon.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+      weekLabel: `${mon.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+    });
+
+    mon.setDate(mon.getDate() - 7);
   }
 
-  return {
-    from: fmtDate(monday),
-    to: fmtDate(sunday),
-    label,
-  };
+  return weeks.reverse();
+}
+
+export function getMonthOptions(weeks: WeekGroup[]): string[] {
+  const seen = new Set<string>();
+  return weeks
+    .map((w) => w.monthLabel)
+    .filter((m) => {
+      if (seen.has(m)) return false;
+      seen.add(m);
+      return true;
+    });
 }
