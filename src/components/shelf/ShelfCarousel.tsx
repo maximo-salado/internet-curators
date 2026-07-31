@@ -256,9 +256,9 @@ export default function ShelfCarousel() {
       <div className="pointer-events-none fixed top-0 inset-x-0 z-30 h-24 bg-gradient-to-b from-black/95 to-transparent" />
       <div className="h-16 shrink-0" />
 
-      <div className="flex-1 min-h-0" style={{ perspective: "800px" }} ref={containerRef}>
-        <div className="h-full overflow-hidden" ref={emblaRef}>
-          <div className="flex h-full items-center" style={{ transformStyle: "preserve-3d" }}>
+      <div className="flex-1 min-h-0 flex items-center" style={{ perspective: "800px" }} ref={containerRef}>
+        <div className="w-full overflow-hidden" ref={emblaRef}>
+          <div className="flex" style={{ transformStyle: "preserve-3d" }}>
             {shelfItems.map((item) => {
               if (item.kind === "prevWeek") {
                 return (
