@@ -113,8 +113,9 @@ export default function MagazineSpread({
     }, 200);
   }, []);
 
-  // ── Wheel-driven zoom ────────────────────────────────────────
+  // ── Wheel-driven zoom (mobile only) ───────────────────────────
   useEffect(() => {
+    if (!isMobile) return;
     const el = containerRef.current;
     if (!el) return;
 
@@ -170,7 +171,7 @@ export default function MagazineSpread({
 
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
-  }, [focusedArticleIndex, scheduleSnap]);
+  }, [isMobile, focusedArticleIndex, scheduleSnap]);
 
   // ── Click to zoom ────────────────────────────────────────────
   const handlePageClick = useCallback(
@@ -236,7 +237,24 @@ export default function MagazineSpread({
       const dx = e.changedTouches[0].clientX - touchStartX.current;
       const dy = e.changedTouches[0].clientY - touchStartY.current;
 
-      // Only handle horizontal swipes for navigation (vertical for zoom is via wheel)
+      // ── Vertical scroll → zoom (mobile only) ─────────────────
+      if (isMobile && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 20) {
+        const currentZoom = zoomRef.current;
+        const delta = dy * 0.001;
+        const newZoom = Math.max(0, Math.min(1, currentZoom + delta));
+
+        zoomRef.current = newZoom;
+        setZoomLevel(newZoom);
+
+        if (focusedArticleIndex === null || focusedArticleIndex !== spreadIndex) {
+          setFocusedArticleIndex(spreadIndex);
+        }
+
+        scheduleSnap();
+        return;
+      }
+
+      // ── Horizontal swipe → navigation ───────────────────────
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
         // Don't switch spreads if zoomed into reading mode
         if (zoomRef.current < 0.85) {
@@ -245,7 +263,7 @@ export default function MagazineSpread({
         }
       }
     },
-    [handleNext, handlePrev],
+    [handleNext, handlePrev, isMobile, scheduleSnap, spreadIndex, focusedArticleIndex],
   );
 
   // ── Article scale interpolation ──────────────────────────────
