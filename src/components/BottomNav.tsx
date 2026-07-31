@@ -39,7 +39,7 @@ export function BottomNav() {
             <path d="M12 2a14 14 0 010 20M12 2a14 14 0 000 20M2 12h20" />
           </svg>
           <span
-            className={`text-[10px] leading-none ${
+            className={`text-xs leading-none ${
               isActive("/") ? "text-zinc-100" : "text-zinc-500"
             }`}
           >
@@ -63,7 +63,7 @@ export function BottomNav() {
             <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" />
           </svg>
           <span
-            className={`text-[10px] leading-none ${
+            className={`text-xs leading-none ${
               isActive("/saved") ? "text-zinc-100" : "text-zinc-500"
             }`}
           >

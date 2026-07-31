@@ -23,7 +23,7 @@ export interface FeedItem {
 }
 
 export type Page =
-  | { type: "cover" }
+  | { type: "cover"; coverImage?: string }
   | { type: "context" }
   | { type: "article"; item: FeedItem }
   | { type: "section"; topics: Tag[] }
@@ -46,14 +46,14 @@ const CHUNK_SIZE = 5;
  * A Section is suppressed (omitted) when fewer than 3 articles remain after it.
  */
 export function composePages(
-  issue: { count: number },
+  issue: { count: number; leadImage?: string },
   items: FeedItem[],
 ): Page[] {
   const pages: Page[] = [];
   const { count } = issue;
 
   // Always open with Cover then Context
-  pages.push({ type: "cover" });
+  pages.push({ type: "cover", coverImage: issue.leadImage });
   pages.push({ type: "context" });
 
   const editorPosition = Math.floor(count / 2);

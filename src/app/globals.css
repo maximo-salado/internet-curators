@@ -1,22 +1,160 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════
+   Internet Curators — Design Token System
+   "Define once, use everywhere."
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Raw CSS custom properties (non-Tailwind / inline style usage) ── */
 :root {
+  /* Surface tokens */
+  --surface-primary: #000000;
+  --surface-secondary: #18181b; /* zinc-900 */
+  --surface-tertiary: #27272a; /* zinc-800 */
+
+  /* Text tokens */
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: #d4d4d8; /* zinc-300 */
+  --text-muted: #a1a1aa; /* zinc-400 */
+  --text-dim: #71717a; /* zinc-500 */
+
+  /* Accent tokens */
+  --accent-400: #fbbf24; /* amber-400 */
+  --accent-500: #f59e0b; /* amber-500 */
+  --accent-600: #d97706; /* amber-600 */
+
+  /* Border tokens */
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-accent: rgba(217, 119, 6, 0.5); /* amber-600/50 */
+
+  /* Border radius scale */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadow tokens (dark-theme appropriate: depth through darkness) */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6);
+  --shadow-cover: 0 4px 16px rgba(0, 0, 0, 0.4), 0 1px 4px rgba(0, 0, 0, 0.3);
+  --shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-spine: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+
+  /* Spacing tokens (app-specific) */
+  --spacing-page-gutter: 1rem;
+  --spacing-cover-gap: 0.75rem;
+  --spacing-shelf-padding: 1rem;
+
+  /* Legacy (kept for backward compat with existing code) */
   --background: #000000;
   --foreground: #ededed;
 }
 
+/* ── Tailwind v4 theme variables (maps to utility classes) ── */
 @theme inline {
+  /*
+   * Type scale
+   *   xs:  12px  — tertiary labels
+   *   sm:  14px  — secondary info
+   *   base: 16px — body, CTAs
+   *   lg:  18px  — cover info
+   *   xl:  20px
+   *   2xl: 24px  — logo
+   *   3xl: 30px
+   *   4xl: 36px
+   *   display:      48px  — cover headlines
+   *   display-lg:   60px
+   *   display-xl:   72px
+   *
+   * Standard sizes (xs–4xl) keep Tailwind defaults.
+   * Only display sizes are added.
+   */
+  --text-display: 48px;
+  --text-display--line-height: 1.1;
+  --text-display-lg: 60px;
+  --text-display-lg--line-height: 1.1;
+  --text-display-xl: 72px;
+  --text-display-xl--line-height: 1.1;
+
+  /*
+   * Color tokens
+   *   Surfaces:     --color-surface-*      → bg-surface-*, text-surface-*, …
+   *   Text/content:  --color-content-*      → text-content-*, bg-content-*, …
+   *   Accent:       --color-accent-*        → bg-accent-*, text-accent-*, border-accent-*, …
+   *   Border-only:   --color-border-subtle   → border-border-subtle (verbatim from spec)
+   *
+   * Naming rationale: Tailwind v4 derives ALL color utilities (bg-, text-,
+   * border-, ring-, etc.) from --color-* variables.  We use namespace prefixes
+   * (surface / content / accent / border) so reading a class like
+   * "bg-surface-primary" or "text-content-muted" is self-documenting.
+   */
+  --color-surface-primary: var(--surface-primary);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-tertiary: var(--surface-tertiary);
+
+  --color-content-primary: var(--text-primary);
+  --color-content-secondary: var(--text-secondary);
+  --color-content-muted: var(--text-muted);
+  --color-content-dim: var(--text-dim);
+
+  --color-accent-400: var(--accent-400);
+  --color-accent-500: var(--accent-500);
+  --color-accent-600: var(--accent-600);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-accent: var(--border-accent);
+
+  /*
+   * Spacing scale — Tailwind defaults are kept.
+   * App-specific additions:
+   */
+  --spacing-page-gutter: var(--spacing-page-gutter);
+  --spacing-cover-gap: var(--spacing-cover-gap);
+  --spacing-shelf-padding: var(--spacing-shelf-padding);
+
+  /*
+   * Border radius — overrides Tailwind defaults to match design system.
+   *   sm:   4px          (was 2px)
+   *   md:   8px          (was 6px)
+   *   lg:   12px         (was 8px)
+   *   xl:   16px         (was 12px)
+   *   full: 9999px       (unchanged)
+   */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-full: var(--radius-full);
+
+  /*
+   * Shadows — dark-theme depth hierarchy.
+   *   card:    subtle elevation for cards
+   *   cover:   depth for magazine covers
+   *   overlay: heavy for modals / drawers
+   *   spine:   book-spine / carousel edge
+   */
+  --shadow-card: var(--shadow-card);
+  --shadow-cover: var(--shadow-cover);
+  --shadow-overlay: var(--shadow-overlay);
+  --shadow-spine: var(--shadow-spine);
+
+  /* Legacy tokens (keep existing code compiling) */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+/* ── Base styles ── */
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--surface-primary);
+  color: var(--text-primary);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── Utility helpers ── */
 
 /* Bottom nav safe area */
 .safe-bottom {

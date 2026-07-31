@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Keyboard } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
@@ -46,6 +47,7 @@ export default function SwipeStack({
   issueDate,
   bottomOffset = false,
 }: SwipeStackProps) {
+  const router = useRouter();
   // -- local state --
   const [selectedIndex, setSelectedIndex] = useState(startIndex);
   const [tocOpen, setTocOpen] = useState(false);
@@ -64,7 +66,7 @@ export default function SwipeStack({
   const renderPage = (page: Page) => {
     switch (page.type) {
       case "cover":
-        return <CoverPage />;
+        return <CoverPage coverImage={page.coverImage} />;
       case "context":
         return <ContextPage />;
       case "article":
@@ -125,13 +127,16 @@ export default function SwipeStack({
 
       {/* Header */}
       <header className="fixed top-0 inset-x-0 z-40 h-14 flex items-center justify-between px-4">
-        <a
-          href="/issues"
+        <button
+          onClick={() => {
+            sessionStorage.setItem("mag-close-from", String(issueNumber));
+            router.push("/issues");
+          }}
           className="flex h-10 w-10 items-center justify-center text-zinc-300 hover:text-white transition-colors"
           aria-label="Back to shelf"
         >
           <SquaresFour size={20} />
-        </a>
+        </button>
         <button
           onClick={() => setTocOpen(true)}
           className="flex items-center gap-1 text-sm text-zinc-300 hover:text-white transition-colors"
@@ -158,7 +163,7 @@ export default function SwipeStack({
         >
           <CaretLeft size={22} />
         </button>
-        <span className="text-xs text-zinc-500 tabular-nums">
+        <span className="text-xs text-zinc-400 tabular-nums">
           {selectedIndex + 1} of {pages.length}
         </span>
         <button

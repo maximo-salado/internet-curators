@@ -20,7 +20,7 @@ export function LandingPage() {
         <div className="mt-10">
           <Link
             href="/feed"
-            className="inline-block rounded-lg bg-white px-8 py-3 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
+            className="inline-block rounded-lg bg-white px-8 py-3 text-base font-semibold text-black hover:bg-zinc-200 transition-colors"
           >
             Browse the feed →
           </Link>

@@ -38,7 +38,7 @@ export default function ClosingPage({ count }: ClosingPageProps) {
         </div>
 
         {/* Final line */}
-        <p className="text-xs text-zinc-600 pt-4">
+        <p className="text-sm text-zinc-400 pt-4">
           Come back tomorrow for a fresh issue.
         </p>
       </div>

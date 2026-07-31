@@ -41,7 +41,7 @@ export function SourceFollowButton({ sourceId, isLoggedIn }: SourceFollowButtonP
   return (
     <button
       onClick={toggle}
-      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
         followed
           ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
           : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300"

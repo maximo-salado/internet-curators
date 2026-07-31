@@ -31,6 +31,7 @@ interface IssueResponse {
   origin: string;
   isToday: boolean;
   published: boolean;
+  leadImage?: string;
 }
 
 interface FeedResponse {
@@ -279,7 +280,7 @@ export default function IssueReader({
   if (status === "empty") {
     return (
       <div className="flex h-full items-center justify-center px-4">
-        <p className="max-w-md text-center text-lg text-zinc-400">
+        <p className="max-w-md text-center text-base text-zinc-400">
           {propIssueNumber != null
             ? "Issue not found."
             : "Today&apos;s issue is still being assembled. Check back later."}
@@ -292,7 +293,7 @@ export default function IssueReader({
   if (status === "error") {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-4">
-        <p className="text-lg text-zinc-400">Something went wrong.</p>
+        <p className="text-base text-zinc-400">Something went wrong.</p>
         {errorMessage && (
           <p className="text-sm text-zinc-500">{errorMessage}</p>
         )}

@@ -25,7 +25,7 @@ export default function BottomBar({ label, onTap, onDismiss }: BottomBarProps) {
       <button
         type="button"
         onClick={onTap}
-        className="text-sm text-zinc-300 hover:text-white transition-colors text-left flex-1 mr-2"
+        className="text-base text-zinc-300 hover:text-white transition-colors text-left flex-1 mr-2"
       >
         {label}
       </button>
