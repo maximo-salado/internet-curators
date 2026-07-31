@@ -262,7 +262,7 @@ export default function ShelfCarousel() {
             {shelfItems.map((item) => {
               if (item.kind === "prevWeek") {
                 return (
-                  <div key="prev-week" className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_38%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
+                  <div key="prev-week" className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_50%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
                     <div className="embla__tilt w-full h-full" style={{ transformStyle: "preserve-3d" }}>
                       <button
                         onClick={scrollToPrevWeek}
@@ -281,7 +281,7 @@ export default function ShelfCarousel() {
 
               if (item.kind === "placeholder") {
                 return (
-                  <div key="tomorrow" className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_38%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
+                  <div key="tomorrow" className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_50%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
                     <div className="embla__tilt w-full h-full" style={{ transformStyle: "preserve-3d" }}>
                       <div
                         className="relative flex flex-col items-center justify-center w-full aspect-[2/3] rounded-lg border border-dashed border-zinc-500/40 bg-zinc-800/80"
