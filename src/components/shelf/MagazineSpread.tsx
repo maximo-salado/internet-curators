@@ -2,12 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
-import Lottie from "lottie-react";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import type { FeedItem } from "@/lib/compose-pages";
 import { ArticlePage } from "@/components/reader/ArticlePage";
-import pageTurnShadowAnim from "@/lottie/page-turn-shadow.json";
-import spinnerAnim from "@/lottie/spinner.json";
 
 interface IssueData {
   issue: { number: number; date: string; count: number; origin: string; isToday: boolean; published: boolean; leadImage?: string };
@@ -45,8 +42,6 @@ export default function MagazineSpread({
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const isZooming = useRef(false);
-  const mobileShadowLottieRef = useRef<any>(null);
-  const desktopShadowLottieRef = useRef<any>(null);
 
   // ── Page-turn drag state ──────────────────────────────────────
   const [dragOffset, setDragOffset] = useState(0);
@@ -123,15 +118,6 @@ export default function MagazineSpread({
     zoomRef.current = zoomLevel;
   }, [zoomLevel]);
 
-  // ── Drive page-turn shadow Lottie via dragOffset ──────────────
-  useEffect(() => {
-    const anim = mobileShadowLottieRef.current || desktopShadowLottieRef.current;
-    if (!anim) return;
-    const totalFrames = 100;
-    const frame = Math.round((Math.abs(dragOffset) / 170) * totalFrames);
-    anim.goToAndStop(frame, true);
-  }, [dragOffset]);
-
   // ── Report zoom changes up ───────────────────────────────────
   useEffect(() => {
     onZoomChange(zoomLevel, focusedArticleIndex);
@@ -179,9 +165,12 @@ export default function MagazineSpread({
       // Total delta to distribute (raw wheel movement)
       const rawDelta = e.deltaY;
 
-      // Zoom portion: fades out as zoomLevel increases
+      // Zoom portion: fades out as zoomLevel increases — only zoom IN
       const zoomDelta = rawDelta * 0.001 * (1 - blend);
-      let newZoom = Math.max(0, Math.min(1, currentZoom + zoomDelta));
+      let newZoom = currentZoom;
+      if (zoomDelta > 0) {
+        newZoom = Math.min(1, currentZoom + zoomDelta);
+      }
 
       // Track focus
       if (focusedArticleIndex === null || focusedArticleIndex !== articleIndex) {
@@ -195,14 +184,7 @@ export default function MagazineSpread({
 
       if (scrollContainer && blend > 0) {
         const scrollDelta = rawDelta * blend;
-
-        // Scroll-up at top boundary → redirect full delta to zoom out
-        if (rawDelta < 0 && scrollContainer.scrollTop <= 0) {
-          const zoomOutDelta = rawDelta * 0.001;
-          newZoom = Math.max(0, Math.min(1, currentZoom + zoomOutDelta));
-        } else {
-          scrollContainer.scrollTop += scrollDelta;
-        }
+        scrollContainer.scrollTop += scrollDelta;
       }
 
       // Always prevent default — we control both zoom and scroll
@@ -296,9 +278,12 @@ export default function MagazineSpread({
         // Raw delta for scroll direction: finger-up (dy<0) = scroll down = positive
         const rawDelta = -dy;
 
-        // Zoom portion: fades out as zoomLevel increases
+        // Zoom portion: fades out as zoomLevel increases — only zoom IN
         const zoomDelta = rawDelta * 0.005 * (1 - blend);
-        let newZoom = Math.max(0, Math.min(1, currentZoom + zoomDelta));
+        let newZoom = currentZoom;
+        if (zoomDelta > 0) {
+          newZoom = Math.min(1, currentZoom + zoomDelta);
+        }
 
         if (focusedArticleIndex === null || focusedArticleIndex !== spreadIndex) {
           setFocusedArticleIndex(spreadIndex);
@@ -311,14 +296,7 @@ export default function MagazineSpread({
 
         if (scrollContainer && blend > 0) {
           const scrollDelta = rawDelta * blend;
-
-          // Scroll-up at top boundary → redirect full delta to zoom out
-          if (rawDelta < 0 && scrollContainer.scrollTop <= 0) {
-            const zoomOutDelta = rawDelta * 0.005;
-            newZoom = Math.max(0, Math.min(1, currentZoom + zoomOutDelta));
-          } else {
-            scrollContainer.scrollTop += scrollDelta;
-          }
+          scrollContainer.scrollTop += scrollDelta;
         }
 
         zoomRef.current = newZoom;
@@ -389,12 +367,7 @@ export default function MagazineSpread({
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-black">
-        <Lottie
-          animationData={spinnerAnim}
-          autoplay={true}
-          loop={true}
-          style={{ width: 32, height: 32, filter: "invert(0.6)" }}
-        />
+        <div className="w-8 h-8 border-2 border-zinc-700 border-t-amber-500 rounded-full animate-spin" />
       </div>
     );
   }
@@ -555,22 +528,6 @@ export default function MagazineSpread({
                 right: mobileIsForward ? undefined : 0,
                 width: 2,
                 background: "rgba(255,255,255,0.08)",
-              }}
-            />
-            {/* Lottie page-turn shadow enhancement */}
-            <Lottie
-              lottieRef={mobileShadowLottieRef}
-              animationData={pageTurnShadowAnim}
-              loop={false}
-              autoplay={false}
-              className="absolute top-0 bottom-0 pointer-events-none z-21"
-              style={{
-                left: mobileIsForward ? 0 : undefined,
-                right: mobileIsForward ? undefined : 0,
-                width: 28,
-                opacity: pageSnapState === "idle" ? 1 : 0,
-                transition: pageSnapState !== "idle" ? "opacity 0.3s ease-out" : "none",
-                mixBlendMode: "multiply" as any,
               }}
             />
           </motion.div>
@@ -760,24 +717,6 @@ export default function MagazineSpread({
               zIndex: 25,
             }}
           />
-          {/* Lottie page-turn shadow enhancement */}
-          <Lottie
-            lottieRef={desktopShadowLottieRef}
-            animationData={pageTurnShadowAnim}
-            loop={false}
-            autoplay={false}
-            className="absolute top-0 bottom-0 pointer-events-none"
-            style={{
-              left: desktopIsForward ? 0 : undefined,
-              right: desktopIsForward ? undefined : 0,
-              width: 28,
-              opacity: pageSnapState === "idle" ? 1 : 0,
-              transition: pageSnapState !== "idle" ? "opacity 0.3s ease-out" : "none",
-              zIndex: 26,
-              mixBlendMode: "multiply" as any,
-            }}
-          />
-
           {/* ── LEFT PAGE ── */}
           {!(hideNonFocused && rightFocused) && (
           <motion.div
