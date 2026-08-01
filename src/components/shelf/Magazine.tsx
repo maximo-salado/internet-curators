@@ -553,7 +553,7 @@ export default function Magazine({
   return (
     <>
       {/* ── Cover card — Level 1 shelf ──────────────────────────── */}
-      <div className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_50%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
+      <div className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_60%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
         <div
           className="embla__tilt w-full h-full"
           style={{ transformStyle: "preserve-3d" }}

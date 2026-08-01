@@ -256,13 +256,13 @@ export default function ShelfCarousel() {
       <div className="pointer-events-none fixed top-0 inset-x-0 z-30 h-24 bg-gradient-to-b from-black/95 to-transparent" />
       <div className="h-16 shrink-0" />
 
-      <div className="flex-1 min-h-0 flex items-center" style={{ perspective: "800px" }} ref={containerRef}>
+      <div className="flex-1 min-h-0 flex items-center pb-16" style={{ perspective: "800px" }} ref={containerRef}>
         <div className="w-full overflow-hidden" ref={emblaRef}>
           <div className="flex" style={{ transformStyle: "preserve-3d" }}>
             {shelfItems.map((item) => {
               if (item.kind === "prevWeek") {
                 return (
-                  <div key="prev-week" className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_50%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
+                  <div key="prev-week" className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_60%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
                     <div className="embla__tilt w-full h-full" style={{ transformStyle: "preserve-3d" }}>
                       <button
                         onClick={scrollToPrevWeek}
@@ -281,7 +281,7 @@ export default function ShelfCarousel() {
 
               if (item.kind === "placeholder") {
                 return (
-                  <div key="tomorrow" className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_50%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
+                  <div key="tomorrow" className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_60%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
                     <div className="embla__tilt w-full h-full" style={{ transformStyle: "preserve-3d" }}>
                       <div
                         className="relative flex flex-col items-center justify-center w-full aspect-[2/3] rounded-lg border border-dashed border-zinc-500/40 bg-zinc-800/80"
