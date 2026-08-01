@@ -44,6 +44,15 @@ export default function MagazineSpread({
   const touchStartY = useRef(0);
   const isZooming = useRef(false);
 
+  // ── Page-turn drag state ──────────────────────────────────────
+  const [dragOffset, setDragOffset] = useState(0);
+  const [pageSnapState, setPageSnapState] = useState<"idle" | "committing" | "canceling">("idle");
+  const dragDirectionRef = useRef<1 | -1>(1);
+  const dragActiveRef = useRef(false);
+  const preserveReadingModeRef = useRef(false);
+  // Target focused article index for the new spread when swiping in reading mode
+  const nextReadingFocusRef = useRef<number | null>(null);
+
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);
     check();
@@ -74,8 +83,23 @@ export default function MagazineSpread({
     return () => { cancelled = true; };
   }, [issueNumber]);
 
-  // ── Reset zoom when spread changes ───────────────────────────
+  // ── Reset zoom + page-turn drag when spread changes ──────────
   useEffect(() => {
+    if (preserveReadingModeRef.current) {
+      // Swiping in reading mode — keep zoomed in on the target article
+      preserveReadingModeRef.current = false;
+      const targetFocus = nextReadingFocusRef.current;
+      nextReadingFocusRef.current = null;
+      if (targetFocus !== null) {
+        setFocusedArticleIndex(targetFocus);
+        zoomRef.current = 1;
+        setZoomLevel(1);
+        setDragOffset(0);
+        setPageSnapState("idle");
+        dragActiveRef.current = false;
+        return;
+      }
+    }
     setZoomLevel(0);
     setFocusedArticleIndex(null);
     zoomRef.current = 0;
@@ -83,6 +107,9 @@ export default function MagazineSpread({
       clearTimeout(snapTimerRef.current);
       snapTimerRef.current = null;
     }
+    setDragOffset(0);
+    setPageSnapState("idle");
+    dragActiveRef.current = false;
   }, [spreadIndex]);
 
   // ── Sync zoomRef with zoomLevel ──────────────────────────────
@@ -114,7 +141,7 @@ export default function MagazineSpread({
     }, 200);
   }, []);
 
-  // ── Wheel-driven zoom (mobile only) ───────────────────────────
+  // ── Wheel-driven zoom + scroll blend (mobile only) ────────────
   useEffect(() => {
     if (!isMobile) return;
     const el = containerRef.current;
@@ -131,43 +158,45 @@ export default function MagazineSpread({
 
       const currentZoom = zoomRef.current;
 
-      if (currentZoom < 0.85) {
-        // ── ZOOM MODE: scroll controls zoom level ──
-        e.preventDefault();
+      // ── Blend factor: 0 = pure zoom, 1 = pure scroll ──
+      const blend = currentZoom; // naturally 0→1
 
-        // Sensitivity: deltaY positive = scroll down = zoom in
-        const delta = e.deltaY * 0.001;
-        const newZoom = Math.max(0, Math.min(1, currentZoom + delta));
+      // Total delta to distribute (raw wheel movement)
+      const rawDelta = e.deltaY;
 
-        zoomRef.current = newZoom;
-        setZoomLevel(newZoom);
+      // Zoom portion: fades out as zoomLevel increases
+      const zoomDelta = rawDelta * 0.001 * (1 - blend);
+      let newZoom = Math.max(0, Math.min(1, currentZoom + zoomDelta));
 
-        if (focusedArticleIndex === null || focusedArticleIndex !== articleIndex) {
-          setFocusedArticleIndex(articleIndex);
-        }
-
-        scheduleSnap();
-      } else {
-        // ── READING MODE: scroll controls article content ──
-        // Check if the article's scroll container is at the top boundary
-        const scrollContainer = articlePage.querySelector(
-          "[data-scroll-container]",
-        ) as HTMLElement | null;
-        if (scrollContainer && e.deltaY < 0 && scrollContainer.scrollTop <= 0) {
-          // Scrolling up at top → transition back to zoom mode
-          e.preventDefault();
-          const delta = e.deltaY * 0.001;
-          const newZoom = Math.max(0, Math.min(1, currentZoom + delta));
-          zoomRef.current = newZoom;
-          setZoomLevel(newZoom);
-
-          if (newZoom < 0.85) {
-            // Left reading mode — snap will handle the rest
-          }
-          scheduleSnap();
-        }
-        // Otherwise: let the browser handle article scrolling naturally
+      // Track focus
+      if (focusedArticleIndex === null || focusedArticleIndex !== articleIndex) {
+        setFocusedArticleIndex(articleIndex);
       }
+
+      // Scroll portion: grows as zoomLevel increases
+      const scrollContainer = articlePage.querySelector(
+        "[data-scroll-container]",
+      ) as HTMLElement | null;
+
+      if (scrollContainer && blend > 0) {
+        const scrollDelta = rawDelta * blend;
+
+        // Scroll-up at top boundary → redirect full delta to zoom out
+        if (rawDelta < 0 && scrollContainer.scrollTop <= 0) {
+          const zoomOutDelta = rawDelta * 0.001;
+          newZoom = Math.max(0, Math.min(1, currentZoom + zoomOutDelta));
+        } else {
+          scrollContainer.scrollTop += scrollDelta;
+        }
+      }
+
+      // Always prevent default — we control both zoom and scroll
+      e.preventDefault();
+
+      zoomRef.current = newZoom;
+      setZoomLevel(newZoom);
+
+      scheduleSnap();
     };
 
     el.addEventListener("wheel", handleWheel, { passive: false });
@@ -234,17 +263,16 @@ export default function MagazineSpread({
     isZooming.current = false;
   }, []);
 
-  // ── Touch-move zoom: continuous finger tracking ──────────────
+  // ── Touch-move: zoom (mobile) or page-turn drag (desktop) ─────
   const handleTouchMove = useCallback(
     (e: React.TouchEvent) => {
-      if (!isMobile) return;
-
       const dy = e.touches[0].clientY - touchStartY.current;
       const dx = e.touches[0].clientX - touchStartX.current;
 
-      // Determine if vertical gesture dominates → zoom mode
-      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
+      // ── Mobile: vertical gesture dominates → zoom mode ──
+      if (isMobile && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
         isZooming.current = true;
+        dragActiveRef.current = false;
         e.preventDefault();
 
         const currentZoom = zoomRef.current;
@@ -259,12 +287,43 @@ export default function MagazineSpread({
         }
         // No scheduleSnap during move — let the user play with it
       }
+      // ── Desktop: horizontal gesture dominates → finger-tracked page turn ──
+      else if (!isMobile && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+        dragActiveRef.current = true;
+        isZooming.current = false;
+
+        const screenWidth = window.innerWidth;
+        const offset = -(dx / screenWidth) * 170;
+        setDragOffset(offset);
+        dragDirectionRef.current = dx > 0 ? -1 : 1;
+      }
     },
     [isMobile, spreadIndex, focusedArticleIndex],
   );
 
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
+      // ── Page-turn snap (desktop) ──
+      if (dragActiveRef.current) {
+        const dx = e.changedTouches[0].clientX - touchStartX.current;
+        const dir = dragDirectionRef.current;
+
+        // Check bounds: can't go past first/last spread
+        const targetIndex = spreadIndex + dir;
+        if (targetIndex < 0 || targetIndex >= totalSpreads) {
+          // Out of bounds — snap back
+          setPageSnapState("canceling");
+        } else if (Math.abs(dx) > 80) {
+          // Commit the page turn
+          setPageSnapState("committing");
+        } else {
+          // Snap back to current page
+          setPageSnapState("canceling");
+        }
+        dragActiveRef.current = false;
+        return;
+      }
+
       // If we were zooming, snap on release (spring feel)
       if (isZooming.current) {
         scheduleSnap();
@@ -274,16 +333,25 @@ export default function MagazineSpread({
       const dx = e.changedTouches[0].clientX - touchStartX.current;
       const dy = e.changedTouches[0].clientY - touchStartY.current;
 
-      // ── Horizontal swipe → navigation ───────────────────────
+      // ── Horizontal swipe → navigation ───
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
-        // Don't switch spreads if zoomed into reading mode
-        if (zoomRef.current < 0.85) {
-          if (dx < 0) handleNext();
-          else handlePrev();
+        if (zoomRef.current >= 0.85) {
+          // In reading mode — preserve zoom on the next article/spread
+          preserveReadingModeRef.current = true;
+          if (isMobile) {
+            // Mobile: one article per spread, focus = new spread index
+            nextReadingFocusRef.current = dx < 0 ? spreadIndex + 1 : spreadIndex - 1;
+          } else {
+            // Desktop: advance one spread, focus left article of new spread
+            const nextSpread = dx < 0 ? spreadIndex + 1 : spreadIndex - 1;
+            nextReadingFocusRef.current = nextSpread * 2;
+          }
         }
+        if (dx < 0) handleNext();
+        else handlePrev();
       }
     },
-    [handleNext, handlePrev, scheduleSnap],
+    [handleNext, handlePrev, scheduleSnap, spreadIndex, totalSpreads],
   );
 
   // ── Article scale interpolation ──────────────────────────────
@@ -355,7 +423,6 @@ export default function MagazineSpread({
               data-article-index={spreadIndex}
             >
               <div
-                data-scroll-container={activeReading ? "true" : undefined}
                 style={{
                   transform: `scale(${activeScale})`,
                   transformOrigin: "top left",
@@ -365,7 +432,7 @@ export default function MagazineSpread({
                   transition: snapTimerRef.current ? "transform 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out" : "none",
                 }}
               >
-                <ArticlePage item={items[spreadIndex]} scrollable={activeReading} />
+                <ArticlePage item={items[spreadIndex]} scrollable={true} />
               </div>
             </motion.div>
           </AnimatePresence>
@@ -394,8 +461,13 @@ export default function MagazineSpread({
   const leftReading = leftEffectiveZoom >= 0.85;
   const rightReading = rightEffectiveZoom >= 0.85;
 
-  // Opacity of non-focused side: fade as zoom increases
-  const nonFocusedOpacity = 1 - zoomLevel;
+  // Opacity of non-focused side: fade as zoom increases — reaches 0 at zoom 0.7, well before reading mode
+  const nonFocusedOpacity = Math.max(0, 1 - zoomLevel / 0.7);
+  const anyFocused = leftFocused || rightFocused;
+  const hideNonFocused = anyFocused && zoomLevel >= 0.85;
+
+  // ── Finger-tracked page-turn computed values ──────────────────
+  const hideNavArrows = pageSnapState !== "idle" || dragOffset !== 0;
 
   return (
     <div
@@ -403,64 +475,101 @@ export default function MagazineSpread({
       className="relative flex items-center justify-center h-full w-full select-none magazine-desktop-parent"
       style={{ perspective: 1000, transformStyle: "preserve-3d", overflow: "visible" }}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* ── Two-page spread with 3D page-turn ── */}
-      <style>{`.magazine-desktop-parent > :first-child { z-index: 10 !important; }`}</style>
-      <AnimatePresence custom={direction}>
-        <motion.div
-          key={spreadIndex}
-          custom={direction}
-          variants={{
-            exit: (dir: number) => ({
-              rotateY: dir * -170,
-              opacity: 0.35,
-              scale: 1,
-            }),
-          }}
-          initial={{ rotateY: 0, opacity: 1, scale: 1 }}
-          animate={{ rotateY: 0, opacity: 1, scale: 1 }}
-          exit="exit"
-          transition={{
-            type: "spring",
-            stiffness: 160,
-            damping: 26,
-          }}
-          className="flex items-stretch w-full h-full"
-          style={{
-            position: "absolute",
-            inset: 0,
-            transformOrigin: "left center",
-            transformStyle: "preserve-3d",
-            backfaceVisibility: "hidden",
-            WebkitBackfaceVisibility: "hidden",
-          }}
-        >
+      {/* ── Finger-tracked 3D page-turn ── */}
+      <style>{`.magazine-desktop-parent > :nth-child(2) { z-index: 10 !important; }`}</style>
+
+      {/* Behind spread — revealed as current page rotates away */}
+      {(() => {
+        const showBehind = dragActiveRef.current || pageSnapState !== "idle";
+        if (!showBehind) return null;
+        const behindIdx = dragDirectionRef.current === 1 ? spreadIndex + 1 : spreadIndex - 1;
+        const behind = spreads[behindIdx];
+        if (!behind) return null;
+        return (
+          <div className="flex items-stretch w-full h-full" style={{ position: "absolute", inset: 0, zIndex: 1 }}>
+            <div className="w-1/2 h-full bg-zinc-900 border-t border-b border-l flex items-center justify-center overflow-hidden"
+              style={{ borderColor: "rgba(217, 119, 6, 0.4)" }}>
+              <ArticlePage item={behind.left} scrollable={false} />
+            </div>
+            <div className="w-[6px] flex-shrink-0"
+              style={{ background: "linear-gradient(90deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.4) 100%)", boxShadow: "inset 0 0 6px rgba(0,0,0,0.8)" }} />
+            <div className="w-1/2 h-full bg-zinc-900 border-t border-b border-r flex items-center justify-center overflow-hidden"
+              style={{ borderColor: "rgba(217, 119, 6, 0.4)" }}>
+              {behind.right ? <ArticlePage item={behind.right} scrollable={false} /> : <span className="text-zinc-600 text-xs italic">—</span>}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Current spread — rotates with finger in real-time, snaps on release */}
+      <motion.div
+        key={spreadIndex}
+        animate={{
+          rotateY:
+            pageSnapState === "committing" ? dragDirectionRef.current * -170 :
+            pageSnapState === "canceling" ? 0 :
+            dragOffset,
+          opacity: pageSnapState === "committing" ? 0.35 : 1,
+          scale: 1,
+        }}
+        transition={pageSnapState !== "idle"
+          ? { type: "spring", stiffness: 160, damping: 26 }
+          : { duration: 0 }}
+        className="flex items-stretch w-full h-full"
+        style={{
+          position: "absolute",
+          inset: 0,
+          transformOrigin: "left center",
+          transformStyle: "preserve-3d",
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
+        }}
+        onAnimationComplete={() => {
+          if (pageSnapState === "committing") {
+            onSpreadIndexChange(spreadIndex + dragDirectionRef.current);
+            setDragOffset(0);
+            setPageSnapState("idle");
+            dragActiveRef.current = false;
+          } else if (pageSnapState === "canceling") {
+            setDragOffset(0);
+            setPageSnapState("idle");
+            dragActiveRef.current = false;
+          }
+        }}
+      >
           {/* ── LEFT PAGE ── */}
+          {!(hideNonFocused && rightFocused) && (
           <motion.div
-            className="w-1/2 h-full relative cursor-pointer group/left"
+            className={hideNonFocused && leftFocused ? "w-full h-full relative cursor-pointer group/left" : "w-1/2 h-full relative cursor-pointer group/left"}
             onClick={() => handlePageClick(leftArticleIndex)}
             data-article-index={leftArticleIndex}
             style={{
-              boxShadow: "inset -4px 0 8px -4px rgba(0,0,0,0.5)",
+              boxShadow: hideNonFocused ? "none" : "inset -4px 0 8px -4px rgba(0,0,0,0.5)",
               opacity: rightFocused ? nonFocusedOpacity : 1,
-              transition: snapTimerRef.current ? "opacity 0.3s ease-out" : "none",
+              visibility: rightFocused && hideNonFocused ? "hidden" : "visible",
+              transition: snapTimerRef.current ? "opacity 0.3s ease-out, visibility 0.3s" : "none",
             }}
             animate={{
               opacity: rightFocused ? nonFocusedOpacity : 1,
             }}
           >
             {/* Page border — right edge only (spine side) */}
-            <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-amber-600/20 to-transparent" />
+            {!hideNonFocused && (
+              <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-amber-600/20 to-transparent" />
+            )}
             {/* Page shadow at spine */}
-            <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/40 to-transparent pointer-events-none" />
+            {!hideNonFocused && (
+              <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/40 to-transparent pointer-events-none" />
+            )}
 
             <div
               className="w-full h-full bg-zinc-900 border-t border-b border-l flex items-center justify-center overflow-hidden"
               style={{ borderColor: `rgba(217, 119, 6, ${0.4 * (1 - leftEffectiveZoom)})` }}
             >
               <div
-                data-scroll-container={leftReading ? "true" : undefined}
                 style={{
                   transform: `scale(${leftScale})`,
                   transformOrigin: "top left",
@@ -479,8 +588,10 @@ export default function MagazineSpread({
               <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
             )}
           </motion.div>
+          )}
 
-          {/* ── SPINE / GUTTER ── */}
+          {/* ── SPINE / GUTTER — hidden when zoomed into reading mode ── */}
+          {!hideNonFocused && (
           <div
             className="w-[6px] flex-shrink-0 relative z-10"
             style={{
@@ -488,28 +599,35 @@ export default function MagazineSpread({
               boxShadow: "inset 0 0 6px rgba(0,0,0,0.8)",
             }}
           />
+          )}
 
           {/* ── RIGHT PAGE ── */}
+          {!(hideNonFocused && leftFocused) && (
           <motion.div
-            className="w-1/2 h-full relative cursor-pointer group/right"
+            className={hideNonFocused && rightFocused ? "w-full h-full relative cursor-pointer group/right" : "w-1/2 h-full relative cursor-pointer group/right"}
             onClick={() => {
               if (!currentSpread.right) return;
               handlePageClick(rightArticleIndex);
             }}
             data-article-index={currentSpread.right ? rightArticleIndex : undefined}
             style={{
-              boxShadow: "inset 4px 0 8px -4px rgba(0,0,0,0.5)",
+              boxShadow: hideNonFocused ? "none" : "inset 4px 0 8px -4px rgba(0,0,0,0.5)",
               opacity: leftFocused ? nonFocusedOpacity : 1,
-              transition: snapTimerRef.current ? "opacity 0.3s ease-out" : "none",
+              visibility: leftFocused && hideNonFocused ? "hidden" : "visible",
+              transition: snapTimerRef.current ? "opacity 0.3s ease-out, visibility 0.3s" : "none",
             }}
             animate={{
               opacity: leftFocused ? nonFocusedOpacity : 1,
             }}
           >
             {/* Page border — left edge only (spine side) */}
-            <div className="absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-amber-600/20 to-transparent" />
+            {!hideNonFocused && (
+              <div className="absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-amber-600/20 to-transparent" />
+            )}
             {/* Page shadow at spine */}
-            <div className="absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-black/40 to-transparent pointer-events-none" />
+            {!hideNonFocused && (
+              <div className="absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-black/40 to-transparent pointer-events-none" />
+            )}
 
             {currentSpread.right ? (
               <div
@@ -517,7 +635,6 @@ export default function MagazineSpread({
                 style={{ borderColor: `rgba(217, 119, 6, ${0.4 * (1 - rightEffectiveZoom)})` }}
               >
                 <div
-                  data-scroll-container={rightReading ? "true" : undefined}
                   style={{
                     transform: `scale(${rightScale})`,
                     transformOrigin: "top left",
@@ -545,13 +662,13 @@ export default function MagazineSpread({
               <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
             )}
           </motion.div>
+          )}
         </motion.div>
-      </AnimatePresence>
 
-      {/* ── Navigation arrows + counter (inside spread) — hide when zoomed in ── */}
+      {/* ── Navigation arrows + counter (inside spread) — hide when zoomed or dragging ── */}
       <motion.div
         className="absolute bottom-0 inset-x-0 flex items-center justify-center gap-4 pb-3 z-10 pointer-events-none"
-        animate={{ opacity: zoomLevel < 0.5 ? 1 : 0 }}
+        animate={{ opacity: hideNavArrows ? 0 : zoomLevel < 0.5 ? 1 : 0 }}
         transition={{ duration: 0.2 }}
       >
         <div className="pointer-events-auto inline-flex items-center gap-4">
