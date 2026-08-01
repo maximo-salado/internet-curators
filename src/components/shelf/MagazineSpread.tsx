@@ -328,7 +328,7 @@ export default function MagazineSpread({
         onTouchEnd={handleTouchEnd}
       >
         {/* Single article card with slide animation — fills container, no nav inside */}
-        <style>{`.magazine-page-stack { position: relative; } .magazine-page-stack > :last-child { z-index: 10 !important; }`}</style>
+        <style>{`.magazine-page-stack { position: relative; } .magazine-page-stack > :first-child { z-index: 10 !important; }`}</style>
         <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden magazine-page-stack" style={{ perspective: 1000, position: "relative" }}>
           <AnimatePresence custom={direction}>
             <motion.div
@@ -406,7 +406,7 @@ export default function MagazineSpread({
       onTouchEnd={handleTouchEnd}
     >
       {/* ── Two-page spread with 3D page-turn ── */}
-      <style>{`.magazine-desktop-parent > :last-child { z-index: 10 !important; }`}</style>
+      <style>{`.magazine-desktop-parent > :first-child { z-index: 10 !important; }`}</style>
       <AnimatePresence custom={direction}>
         <motion.div
           key={spreadIndex}
