@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "@phosphor-icons/react";
+import Lottie from "lottie-react";
 import type { IssueSummary } from "@/app/api/issues/route";
 import MagazineSpread from "./MagazineSpread";
+import closeAnim from "@/lottie/close-x.json";
 
 interface MagazineProps {
   issue: IssueSummary;
@@ -51,6 +52,7 @@ export default function Magazine({
 }: MagazineProps) {
   const [phase, setPhase] = useState<Phase>("closed");
   const cardRef = useRef<HTMLButtonElement>(null);
+  const closeLottieRef = useRef<any>(null);
   const [cardRect, setCardRect] = useState<DOMRect | null>(null);
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
 
@@ -461,14 +463,22 @@ export default function Magazine({
         <motion.button
           key="magazine-close"
           onClick={handleClose}
-          className="fixed z-[63] top-4 right-4 w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+          onMouseEnter={() => closeLottieRef.current?.play()}
+          onMouseLeave={() => closeLottieRef.current?.stop()}
+          className="fixed z-[63] top-4 right-4 w-12 h-12 flex items-center justify-center transition-colors"
           aria-label="Close magazine"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2, delay: 0.15 }}
         >
-          <X size={24} />
+          <Lottie
+            lottieRef={closeLottieRef}
+            animationData={closeAnim}
+            loop={false}
+            autoplay={false}
+            style={{ width: 24, height: 24 }}
+          />
         </motion.button>
       </AnimatePresence>
     );

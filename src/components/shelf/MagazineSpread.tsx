@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
+import Lottie from "lottie-react";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import type { FeedItem } from "@/lib/compose-pages";
 import { ArticlePage } from "@/components/reader/ArticlePage";
+import spinnerAnim from "@/lottie/spinner.json";
+import pageTurnShadowAnim from "@/lottie/page-turn-shadow.json";
 
 interface IssueData {
   issue: { number: number; date: string; count: number; origin: string; isToday: boolean; published: boolean; leadImage?: string };
@@ -53,6 +56,9 @@ export default function MagazineSpread({
   const nextReadingFocusRef = useRef<number | null>(null);
   // Track actual article count for mobile bound checks
   const itemsLengthRef = useRef(0);
+
+  // Page-turn shadow Lottie ref
+  const shadowLottieRef = useRef<any>(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);
@@ -122,6 +128,17 @@ export default function MagazineSpread({
   useEffect(() => {
     onZoomChange(zoomLevel, focusedArticleIndex);
   }, [zoomLevel, focusedArticleIndex, onZoomChange]);
+
+  // ── Drive page-turn shadow Lottie from dragOffset ───────────
+  useEffect(() => {
+    const lottie = shadowLottieRef.current;
+    if (!lottie) return;
+    const totalFrames = 100;
+    const frame = Math.round(
+      Math.min(1, Math.abs(dragOffset) / 170) * totalFrames,
+    );
+    lottie.goToAndStop(frame, true);
+  }, [dragOffset]);
 
   // ── Snap behavior ────────────────────────────────────────────
   const scheduleSnap = useCallback(() => {
@@ -367,7 +384,12 @@ export default function MagazineSpread({
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-black">
-        <div className="w-8 h-8 border-2 border-zinc-700 border-t-amber-500 rounded-full animate-spin" />
+        <Lottie
+          animationData={spinnerAnim}
+          loop={true}
+          autoplay={true}
+          style={{ width: 32, height: 32 }}
+        />
       </div>
     );
   }
@@ -530,6 +552,25 @@ export default function MagazineSpread({
                 background: "rgba(255,255,255,0.08)",
               }}
             />
+            {/* Lottie page-turn shadow overlay */}
+            {dragActiveRef.current && (
+              <div
+                className="absolute top-0 bottom-0 pointer-events-none z-20"
+                style={{
+                  left: mobileIsForward ? 0 : undefined,
+                  right: mobileIsForward ? undefined : 0,
+                  width: 32,
+                }}
+              >
+                <Lottie
+                  lottieRef={shadowLottieRef}
+                  animationData={pageTurnShadowAnim}
+                  loop={false}
+                  autoplay={false}
+                  style={{ width: 32, height: "100%" }}
+                />
+              </div>
+            )}
           </motion.div>
         </div>
       </div>
@@ -717,6 +758,26 @@ export default function MagazineSpread({
               zIndex: 25,
             }}
           />
+          {/* Lottie page-turn shadow overlay — desktop */}
+          {dragActiveRef.current && (
+            <div
+              className="absolute top-0 bottom-0 pointer-events-none"
+              style={{
+                left: desktopIsForward ? 0 : undefined,
+                right: desktopIsForward ? undefined : 0,
+                width: 32,
+                zIndex: 25,
+              }}
+            >
+              <Lottie
+                lottieRef={shadowLottieRef}
+                animationData={pageTurnShadowAnim}
+                loop={false}
+                autoplay={false}
+                style={{ width: 32, height: "100%" }}
+              />
+            </div>
+          )}
           {/* ── LEFT PAGE ── */}
           {!(hideNonFocused && rightFocused) && (
           <motion.div

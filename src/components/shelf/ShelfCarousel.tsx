@@ -3,10 +3,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useEmblaCarousel from "embla-carousel-react";
-import { Calendar, List, X, BookmarkSimple } from "@phosphor-icons/react";
+import { Calendar, List, X } from "@phosphor-icons/react";
+import Lottie from "lottie-react";
 import type { IssueSummary } from "@/app/api/issues/route";
 import Magazine from "./Magazine";
 import NavDrawer from "@/components/reader/NavDrawer";
+import bookmarkAnim from "@/lottie/bookmark.json";
 
 type ShelfItem =
   | { kind: "issue"; issue: IssueSummary }
@@ -320,7 +322,12 @@ export default function ShelfCarousel() {
             href={resumeData.href}
             className="pointer-events-auto inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-800 text-amber-400 rounded-full text-base font-medium hover:bg-zinc-700 hover:text-amber-300 transition-colors shadow-lg shadow-black/40 border border-zinc-700/50"
           >
-            <BookmarkSimple size={16} weight="fill" className="text-amber-400" />
+            <Lottie
+              animationData={bookmarkAnim}
+              loop={true}
+              autoplay={true}
+              style={{ width: 16, height: 16 }}
+            />
             <span>Continue where you left →</span>
           </a>
         </div>
