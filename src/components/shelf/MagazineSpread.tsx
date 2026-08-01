@@ -376,6 +376,13 @@ export default function MagazineSpread({
     const activeScale = baseScale + activeZoom * (1 - baseScale);
     const activeReading = activeZoom >= 0.85;
 
+    // ── Spine shadow overlay ──────────────────────────────────────
+    const mobileShadowOpacity =
+      pageSnapState === "idle"
+        ? Math.sin(Math.abs(dragOffset) / 170 * Math.PI)
+        : 0;
+    const mobileIsForward = dragDirectionRef.current === 1;
+
     const showBehind = dragActiveRef.current || pageSnapState !== "idle";
     const behindIdx = dragDirectionRef.current === 1 ? spreadIndex + 1 : spreadIndex - 1;
     const behindValid = behindIdx >= 0 && behindIdx < items.length;
@@ -458,6 +465,45 @@ export default function MagazineSpread({
             {!activeReading && (
               <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
             )}
+
+            {/* ── Spine shadow/curve overlay — reduces flat-plane feel during page turn ── */}
+            <motion.div
+              className="absolute top-0 bottom-0 pointer-events-none z-20"
+              animate={{
+                opacity: pageSnapState === "idle"
+                  ? Math.sin(Math.abs(dragOffset) / 170 * Math.PI)
+                  : 0,
+              }}
+              transition={pageSnapState !== "idle"
+                ? { type: "spring", stiffness: 160, damping: 26 }
+                : { duration: 0 }}
+              style={{
+                left: mobileIsForward ? 0 : undefined,
+                right: mobileIsForward ? undefined : 0,
+                width: 28,
+                background: mobileIsForward
+                  ? "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.35) 35%, rgba(0,0,0,0.05) 100%)"
+                  : "linear-gradient(to left, transparent 0%, rgba(0,0,0,0.35) 35%, rgba(0,0,0,0.05) 100%)",
+              }}
+            />
+            {/* Spine highlight strip */}
+            <motion.div
+              className="absolute top-0 bottom-0 pointer-events-none z-20"
+              animate={{
+                opacity: pageSnapState === "idle"
+                  ? Math.sin(Math.abs(dragOffset) / 170 * Math.PI)
+                  : 0,
+              }}
+              transition={pageSnapState !== "idle"
+                ? { type: "spring", stiffness: 160, damping: 26 }
+                : { duration: 0 }}
+              style={{
+                left: mobileIsForward ? 0 : undefined,
+                right: mobileIsForward ? undefined : 0,
+                width: 2,
+                background: "rgba(255,255,255,0.08)",
+              }}
+            />
           </motion.div>
         </div>
       </div>
@@ -488,6 +534,13 @@ export default function MagazineSpread({
   const nonFocusedOpacity = Math.max(0, 1 - zoomLevel / 0.7);
   const anyFocused = leftFocused || rightFocused;
   const hideNonFocused = anyFocused && zoomLevel >= 0.85;
+
+  // ── Desktop spine shadow overlay ────────────────────────────────
+  const desktopShadowOpacity =
+    pageSnapState === "idle"
+      ? Math.sin(Math.abs(dragOffset) / 170 * Math.PI)
+      : 0;
+  const desktopIsForward = dragDirectionRef.current === 1;
 
   // ── Finger-tracked page-turn computed values ──────────────────
   const hideNavArrows = pageSnapState !== "idle" || dragOffset !== 0;
@@ -596,6 +649,47 @@ export default function MagazineSpread({
           }
         }}
       >
+          {/* ── Spine shadow/curve overlay — reduces flat-plane feel during page turn ── */}
+          <motion.div
+            className="absolute top-0 bottom-0 pointer-events-none"
+            animate={{
+              opacity: pageSnapState === "idle"
+                ? Math.sin(Math.abs(dragOffset) / 170 * Math.PI)
+                : 0,
+            }}
+            transition={pageSnapState !== "idle"
+              ? { type: "spring", stiffness: 160, damping: 26 }
+              : { duration: 0 }}
+            style={{
+              left: desktopIsForward ? 0 : undefined,
+              right: desktopIsForward ? undefined : 0,
+              width: 24,
+              background: desktopIsForward
+                ? "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.35) 35%, rgba(0,0,0,0.05) 100%)"
+                : "linear-gradient(to left, transparent 0%, rgba(0,0,0,0.35) 35%, rgba(0,0,0,0.05) 100%)",
+              zIndex: 25,
+            }}
+          />
+          {/* Spine highlight strip */}
+          <motion.div
+            className="absolute top-0 bottom-0 pointer-events-none"
+            animate={{
+              opacity: pageSnapState === "idle"
+                ? Math.sin(Math.abs(dragOffset) / 170 * Math.PI)
+                : 0,
+            }}
+            transition={pageSnapState !== "idle"
+              ? { type: "spring", stiffness: 160, damping: 26 }
+              : { duration: 0 }}
+            style={{
+              left: desktopIsForward ? 0 : undefined,
+              right: desktopIsForward ? undefined : 0,
+              width: 2,
+              background: "rgba(255,255,255,0.08)",
+              zIndex: 25,
+            }}
+          />
+
           {/* ── LEFT PAGE ── */}
           {!(hideNonFocused && rightFocused) && (
           <motion.div
