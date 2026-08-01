@@ -240,7 +240,8 @@ export default function MagazineSpread({
       // ── Vertical scroll → zoom (mobile only) ─────────────────
       if (isMobile && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 20) {
         const currentZoom = zoomRef.current;
-        const delta = dy * 0.001;
+        // Touch sensitivity: a ~300px swipe = full zoom range
+        const delta = -(dy * 0.004);
         const newZoom = Math.max(0, Math.min(1, currentZoom + delta));
 
         zoomRef.current = newZoom;
