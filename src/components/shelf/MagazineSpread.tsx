@@ -308,22 +308,23 @@ export default function MagazineSpread({
         onTouchEnd={handleTouchEnd}
       >
         {/* Single article card with slide animation — fills container, no nav inside */}
-        <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden" style={{ perspective: 1000 }}>
-          <AnimatePresence mode="wait" custom={direction}>
+        <style>{`.magazine-page-stack { position: relative; } .magazine-page-stack > :last-child { z-index: 10 !important; }`}</style>
+        <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden magazine-page-stack" style={{ perspective: 1000, position: "relative" }}>
+          <AnimatePresence custom={direction}>
             <motion.div
               key={spreadIndex}
               custom={direction}
               variants={{
-                enter: (dir: number) => ({ rotateY: dir * 120, opacity: 0 }),
-                center: { rotateY: 0, opacity: 1 },
-                exit: (dir: number) => ({ rotateY: dir * -120, opacity: 0 }),
+                exit: (dir: number) => ({ rotateY: dir * -170, opacity: 0.35 }),
               }}
-              initial="enter"
-              animate="center"
+              initial={{ rotateY: 0, opacity: 1 }}
+              animate={{ rotateY: 0, opacity: 1 }}
               exit="exit"
               transition={{ type: "spring", stiffness: 160, damping: 26 }}
               className="w-full h-full bg-zinc-900 overflow-hidden border-4 relative cursor-pointer"
               style={{
+                position: "absolute",
+                inset: 0,
                 transformOrigin: "left center",
                 boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
                 borderColor: `rgba(217, 119, 6, ${0.5 * (1 - activeZoom)})`,
@@ -379,35 +380,26 @@ export default function MagazineSpread({
   return (
     <div
       ref={containerRef}
-      className="relative flex items-center justify-center h-full w-full select-none"
+      className="relative flex items-center justify-center h-full w-full select-none magazine-desktop-parent"
       style={{ perspective: 1000, transformStyle: "preserve-3d", overflow: "visible" }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
       {/* ── Two-page spread with 3D page-turn ── */}
-      <AnimatePresence mode="wait" custom={direction}>
+      <style>{`.magazine-desktop-parent > :last-child { z-index: 10 !important; }`}</style>
+      <AnimatePresence custom={direction}>
         <motion.div
           key={spreadIndex}
           custom={direction}
           variants={{
-            enter: (dir: number) => ({
-              rotateY: dir * 120,
-              opacity: 0,
-              scale: 1,
-            }),
-            center: {
-              rotateY: 0,
-              opacity: 1,
-              scale: 1,
-            },
             exit: (dir: number) => ({
-              rotateY: dir * -120,
-              opacity: 0,
+              rotateY: dir * -170,
+              opacity: 0.35,
               scale: 1,
             }),
           }}
-          initial="enter"
-          animate="center"
+          initial={{ rotateY: 0, opacity: 1, scale: 1 }}
+          animate={{ rotateY: 0, opacity: 1, scale: 1 }}
           exit="exit"
           transition={{
             type: "spring",
@@ -416,6 +408,8 @@ export default function MagazineSpread({
           }}
           className="flex items-stretch w-full h-full"
           style={{
+            position: "absolute",
+            inset: 0,
             transformOrigin: "left center",
             transformStyle: "preserve-3d",
             backfaceVisibility: "hidden",
