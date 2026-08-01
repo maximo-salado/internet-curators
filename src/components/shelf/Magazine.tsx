@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, CaretLeft, CaretRight } from "@phosphor-icons/react";
+import { X } from "@phosphor-icons/react";
 import type { IssueSummary } from "@/app/api/issues/route";
 import MagazineSpread from "./MagazineSpread";
 
@@ -172,29 +172,7 @@ export default function Magazine({
     };
   }, [cardRect]);
 
-  // ── Pagination helpers ─────────────────────────────────────────
-
-  const isDesktop = !isMobile;
-  const displayIndex = spreadIndex + 1;
-  const displayTotal = isDesktop ? totalSpreads : totalArticles;
-  // On desktop: spread counter. On mobile: article counter.
-  const counterLabel = isDesktop
-    ? `Spread ${displayIndex} / ${displayTotal}`
-    : `Article ${displayIndex} / ${displayTotal}`;
-
-  const handlePrevClick = useCallback(() => {
-    setSpreadIndex((prev) => Math.max(0, prev - 1));
-  }, []);
-
-  const handleNextClick = useCallback(() => {
-    setSpreadIndex((prev) => {
-      const max = isMobile ? totalArticles - 1 : totalSpreads - 1;
-      return Math.min(max, prev + 1);
-    });
-  }, [isMobile, totalArticles, totalSpreads]);
-
-  const atStart = spreadIndex === 0;
-  const atEnd = isMobile ? spreadIndex >= totalArticles - 1 : spreadIndex >= totalSpreads - 1;
+  // ── Pagination is now handled inside MagazineSpread ──
 
   // ── Handlers ───────────────────────────────────────────────────
 
@@ -346,40 +324,6 @@ export default function Magazine({
           />
         </motion.div>
 
-        {/* ── Pagination pill — outside spread container, same position as bookmark CTA ── */}
-        <motion.div
-          key="magazine-pagination"
-          className="fixed bottom-6 inset-x-0 z-[63] flex justify-center pointer-events-none"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{
-            opacity: phase === "open" && zoomLevel < 0.5 ? 1 : 0,
-            y: phase === "open" && zoomLevel < 0.5 ? 0 : 12,
-          }}
-          exit={{ opacity: 0, y: 12 }}
-          transition={{ duration: 0.25, delay: 0.2 }}
-        >
-          <div className="pointer-events-auto inline-flex items-center gap-3 px-5 py-2.5 bg-zinc-800 text-amber-400 rounded-full text-sm font-medium shadow-lg shadow-black/40 border border-zinc-700/50">
-            <button
-              onClick={handlePrevClick}
-              disabled={atStart}
-              className="flex items-center justify-center text-amber-400 hover:text-amber-300 disabled:opacity-20 disabled:cursor-default transition-colors"
-              aria-label="Previous spread"
-            >
-              <CaretLeft size={16} />
-            </button>
-            <span className="tabular-nums min-w-[100px] text-center select-none">
-              {counterLabel}
-            </span>
-            <button
-              onClick={handleNextClick}
-              disabled={atEnd}
-              className="flex items-center justify-center text-amber-400 hover:text-amber-300 disabled:opacity-20 disabled:cursor-default transition-colors"
-              aria-label="Next spread"
-            >
-              <CaretRight size={16} />
-            </button>
-          </div>
-        </motion.div>
 
         {/* ── L3 reading-mode header — RSSMag logo + issue number ── */}
         <motion.div
@@ -543,11 +487,6 @@ export default function Magazine({
     handleZoomOutComplete,
     handleTotalSpreadsChange,
     handleZoomChange,
-    handlePrevClick,
-    handleNextClick,
-    counterLabel,
-    atStart,
-    atEnd,
   ]);
 
   return (
