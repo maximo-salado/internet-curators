@@ -6,8 +6,8 @@ import Lottie from "lottie-react";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import type { FeedItem } from "@/lib/compose-pages";
 import { ArticlePage } from "@/components/reader/ArticlePage";
-import pageTurnShadowAnim from "@/../public/lottie/page-turn-shadow.json";
-import spinnerAnim from "@/../public/lottie/spinner.json";
+import pageTurnShadowAnim from "@/lottie/page-turn-shadow.json";
+import spinnerAnim from "@/lottie/spinner.json";
 
 interface IssueData {
   issue: { number: number; date: string; count: number; origin: string; isToday: boolean; published: boolean; leadImage?: string };

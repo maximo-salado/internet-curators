@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useEmblaCarousel from "embla-carousel-react";
 import { Calendar, List, X } from "@phosphor-icons/react";
 import Lottie from "lottie-react";
-import bookmarkAnim from "@/../public/lottie/bookmark.json";
+import bookmarkAnim from "@/lottie/bookmark.json";
 import type { IssueSummary } from "@/app/api/issues/route";
 import Magazine from "./Magazine";
 import NavDrawer from "@/components/reader/NavDrawer";

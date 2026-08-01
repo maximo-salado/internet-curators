@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Lottie from "lottie-react";
-import closeAnim from "@/../public/lottie/close-x.json";
+import closeAnim from "@/lottie/close-x.json";
 import type { IssueSummary } from "@/app/api/issues/route";
 import MagazineSpread from "./MagazineSpread";
 
