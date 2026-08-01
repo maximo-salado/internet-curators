@@ -282,22 +282,47 @@ export default function MagazineSpread({
       const dy = e.touches[0].clientY - touchStartY.current;
       const dx = e.touches[0].clientX - touchStartX.current;
 
-      // ── Mobile: vertical gesture dominates → zoom mode ──
+      // ── Mobile: vertical gesture dominates → zoom + scroll blend ──
       if (isMobile && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
         isZooming.current = true;
         dragActiveRef.current = false;
         e.preventDefault();
 
         const currentZoom = zoomRef.current;
-        const delta = -(dy * 0.005);
-        const newZoom = Math.max(0, Math.min(1, currentZoom + delta));
 
-        zoomRef.current = newZoom;
-        setZoomLevel(newZoom);
+        // ── Blend factor: 0 = pure zoom, 1 = pure scroll ──
+        const blend = currentZoom; // naturally 0→1
+
+        // Raw delta for scroll direction: finger-up (dy<0) = scroll down = positive
+        const rawDelta = -dy;
+
+        // Zoom portion: fades out as zoomLevel increases
+        const zoomDelta = rawDelta * 0.005 * (1 - blend);
+        let newZoom = Math.max(0, Math.min(1, currentZoom + zoomDelta));
 
         if (focusedArticleIndex === null || focusedArticleIndex !== spreadIndex) {
           setFocusedArticleIndex(spreadIndex);
         }
+
+        // Scroll portion: grows as zoomLevel increases
+        const scrollContainer = containerRef.current?.querySelector(
+          "[data-scroll-container]",
+        ) as HTMLElement | null;
+
+        if (scrollContainer && blend > 0) {
+          const scrollDelta = rawDelta * blend;
+
+          // Scroll-up at top boundary → redirect full delta to zoom out
+          if (rawDelta < 0 && scrollContainer.scrollTop <= 0) {
+            const zoomOutDelta = rawDelta * 0.005;
+            newZoom = Math.max(0, Math.min(1, currentZoom + zoomOutDelta));
+          } else {
+            scrollContainer.scrollTop += scrollDelta;
+          }
+        }
+
+        zoomRef.current = newZoom;
+        setZoomLevel(newZoom);
         // No scheduleSnap during move — let the user play with it
       }
       // ── Horizontal gesture dominates → finger-tracked page turn ──
@@ -424,7 +449,16 @@ export default function MagazineSpread({
               borderColor: "rgba(217, 119, 6, 0.4)",
               boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
             }}>
-              <ArticlePage item={items[behindIdx]} scrollable={false} />
+              <div
+                style={{
+                  transform: `scale(${baseScale})`,
+                  transformOrigin: "top left",
+                  width: `${(1 / baseScale) * 100}%`,
+                  height: `${(1 / baseScale) * 100}%`,
+                }}
+              >
+                <ArticlePage item={items[behindIdx]} scrollable={false} />
+              </div>
             </div>
           )}
 
@@ -602,13 +636,15 @@ export default function MagazineSpread({
           <div className="flex items-stretch w-full h-full" style={{ position: "absolute", inset: 0, zIndex: 5 }}>
             <div className="w-1/2 h-full bg-zinc-900 border-t border-b border-l flex items-center justify-center overflow-hidden"
               style={{ borderColor: "rgba(217, 119, 6, 0.4)" }}>
-              <ArticlePage item={behind.left} scrollable={false} />
+              <div style={{ transform: `scale(${baseScale})`, transformOrigin: "top left", width: `${(1 / baseScale) * 100}%`, height: `${(1 / baseScale) * 100}%` }}>
+                <ArticlePage item={behind.left} scrollable={false} />
+              </div>
             </div>
             <div className="w-[6px] flex-shrink-0"
               style={{ background: "linear-gradient(90deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.4) 100%)", boxShadow: "inset 0 0 6px rgba(0,0,0,0.8)" }} />
             <div className="w-1/2 h-full bg-zinc-900 border-t border-b border-r flex items-center justify-center overflow-hidden"
               style={{ borderColor: "rgba(217, 119, 6, 0.4)" }}>
-              {behind.right ? <ArticlePage item={behind.right} scrollable={false} /> : <span className="text-zinc-600 text-xs italic">—</span>}
+              {behind.right ? <div style={{ transform: `scale(${baseScale})`, transformOrigin: "top left", width: `${(1 / baseScale) * 100}%`, height: `${(1 / baseScale) * 100}%` }}><ArticlePage item={behind.right} scrollable={false} /></div> : <span className="text-zinc-600 text-xs italic">—</span>}
             </div>
           </div>
         );

@@ -477,7 +477,7 @@ export default function Magazine({
             animationData={closeAnim}
             loop={false}
             autoplay={false}
-            style={{ width: 28, height: 28, filter: "invert(1)" }}
+            style={{ width: 28, height: 28 }}
           />
         </motion.button>
       </AnimatePresence>

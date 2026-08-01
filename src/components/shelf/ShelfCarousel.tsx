@@ -326,7 +326,7 @@ export default function ShelfCarousel() {
               animationData={bookmarkAnim}
               autoplay={true}
               loop={true}
-              style={{ width: 16, height: 16, filter: "invert(0.85) sepia(0.6) saturate(3) hue-rotate(340deg)" }}
+              style={{ width: 16, height: 16 }}
             />
             <span>Continue where you left →</span>
           </a>
