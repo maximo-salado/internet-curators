@@ -42,6 +42,7 @@ export default function MagazineSpread({
 
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
+  const isZooming = useRef(false);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);
@@ -230,18 +231,24 @@ export default function MagazineSpread({
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
+    isZooming.current = false;
   }, []);
 
-  const handleTouchEnd = useCallback(
+  // ── Touch-move zoom: continuous finger tracking ──────────────
+  const handleTouchMove = useCallback(
     (e: React.TouchEvent) => {
-      const dx = e.changedTouches[0].clientX - touchStartX.current;
-      const dy = e.changedTouches[0].clientY - touchStartY.current;
+      if (!isMobile) return;
 
-      // ── Vertical scroll → zoom (mobile only) ─────────────────
-      if (isMobile && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 20) {
+      const dy = e.touches[0].clientY - touchStartY.current;
+      const dx = e.touches[0].clientX - touchStartX.current;
+
+      // Determine if vertical gesture dominates → zoom mode
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
+        isZooming.current = true;
+        e.preventDefault();
+
         const currentZoom = zoomRef.current;
-        // Touch sensitivity: a ~300px swipe = full zoom range
-        const delta = -(dy * 0.004);
+        const delta = -(dy * 0.005);
         const newZoom = Math.max(0, Math.min(1, currentZoom + delta));
 
         zoomRef.current = newZoom;
@@ -250,10 +257,22 @@ export default function MagazineSpread({
         if (focusedArticleIndex === null || focusedArticleIndex !== spreadIndex) {
           setFocusedArticleIndex(spreadIndex);
         }
+        // No scheduleSnap during move — let the user play with it
+      }
+    },
+    [isMobile, spreadIndex, focusedArticleIndex],
+  );
 
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      // If we were zooming, snap on release (spring feel)
+      if (isZooming.current) {
         scheduleSnap();
         return;
       }
+
+      const dx = e.changedTouches[0].clientX - touchStartX.current;
+      const dy = e.changedTouches[0].clientY - touchStartY.current;
 
       // ── Horizontal swipe → navigation ───────────────────────
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
@@ -264,7 +283,7 @@ export default function MagazineSpread({
         }
       }
     },
-    [handleNext, handlePrev, isMobile, scheduleSnap, spreadIndex, focusedArticleIndex],
+    [handleNext, handlePrev, scheduleSnap],
   );
 
   // ── Article scale interpolation ──────────────────────────────
@@ -305,6 +324,7 @@ export default function MagazineSpread({
         ref={containerRef}
         className="flex flex-col h-full w-full select-none"
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         {/* Single article card with slide animation — fills container, no nav inside */}
