@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import type { FeedItem } from "@/lib/compose-pages";
 import { ArticlePage } from "@/components/reader/ArticlePage";
@@ -30,7 +30,6 @@ export default function MagazineSpread({
 }: MagazineSpreadProps) {
   const [issueData, setIssueData] = useState<IssueData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [direction, setDirection] = useState<1 | -1>(1);
   const [isMobile, setIsMobile] = useState(false);
 
   // ── Zoom state ────────────────────────────────────────────────
@@ -52,6 +51,8 @@ export default function MagazineSpread({
   const preserveReadingModeRef = useRef(false);
   // Target focused article index for the new spread when swiping in reading mode
   const nextReadingFocusRef = useRef<number | null>(null);
+  // Track actual article count for mobile bound checks
+  const itemsLengthRef = useRef(0);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);
@@ -245,14 +246,12 @@ export default function MagazineSpread({
 
   const handleNext = useCallback(() => {
     if (spreadIndex < maxIndex) {
-      setDirection(1);
       onSpreadIndexChange(spreadIndex + 1);
     }
   }, [spreadIndex, maxIndex, onSpreadIndexChange]);
 
   const handlePrev = useCallback(() => {
     if (spreadIndex > 0) {
-      setDirection(-1);
       onSpreadIndexChange(spreadIndex - 1);
     }
   }, [spreadIndex, onSpreadIndexChange]);
@@ -287,8 +286,8 @@ export default function MagazineSpread({
         }
         // No scheduleSnap during move — let the user play with it
       }
-      // ── Desktop: horizontal gesture dominates → finger-tracked page turn ──
-      else if (!isMobile && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+      // ── Horizontal gesture dominates → finger-tracked page turn ──
+      else if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
         dragActiveRef.current = true;
         isZooming.current = false;
 
@@ -303,17 +302,27 @@ export default function MagazineSpread({
 
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
-      // ── Page-turn snap (desktop) ──
+      // ── Page-turn snap ──
       if (dragActiveRef.current) {
         const dx = e.changedTouches[0].clientX - touchStartX.current;
         const dir = dragDirectionRef.current;
 
-        // Check bounds: can't go past first/last spread
+        // Check bounds: can't go past first/last spread (mobile uses article count)
         const targetIndex = spreadIndex + dir;
-        if (targetIndex < 0 || targetIndex >= totalSpreads) {
+        const effectiveMax = isMobile ? itemsLengthRef.current - 1 : totalSpreads - 1;
+        if (targetIndex < 0 || targetIndex > effectiveMax) {
           // Out of bounds — snap back
           setPageSnapState("canceling");
         } else if (Math.abs(dx) > 80) {
+          // Reading mode preservation
+          if (zoomRef.current >= 0.85) {
+            preserveReadingModeRef.current = true;
+            if (isMobile) {
+              nextReadingFocusRef.current = targetIndex;
+            } else {
+              nextReadingFocusRef.current = targetIndex * 2;
+            }
+          }
           // Commit the page turn
           setPageSnapState("committing");
         } else {
@@ -329,29 +338,8 @@ export default function MagazineSpread({
         scheduleSnap();
         return;
       }
-
-      const dx = e.changedTouches[0].clientX - touchStartX.current;
-      const dy = e.changedTouches[0].clientY - touchStartY.current;
-
-      // ── Horizontal swipe → navigation ───
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
-        if (zoomRef.current >= 0.85) {
-          // In reading mode — preserve zoom on the next article/spread
-          preserveReadingModeRef.current = true;
-          if (isMobile) {
-            // Mobile: one article per spread, focus = new spread index
-            nextReadingFocusRef.current = dx < 0 ? spreadIndex + 1 : spreadIndex - 1;
-          } else {
-            // Desktop: advance one spread, focus left article of new spread
-            const nextSpread = dx < 0 ? spreadIndex + 1 : spreadIndex - 1;
-            nextReadingFocusRef.current = nextSpread * 2;
-          }
-        }
-        if (dx < 0) handleNext();
-        else handlePrev();
-      }
     },
-    [handleNext, handlePrev, scheduleSnap, spreadIndex, totalSpreads],
+    [scheduleSnap, spreadIndex, totalSpreads, isMobile],
   );
 
   // ── Article scale interpolation ──────────────────────────────
@@ -369,6 +357,7 @@ export default function MagazineSpread({
 
   const items = issueData?.items ?? [];
   const isEmpty = items.length === 0;
+  itemsLengthRef.current = items.length;
 
   if (isEmpty || !issueData) {
     return (
@@ -379,13 +368,17 @@ export default function MagazineSpread({
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // MOBILE: single-article cards, swipe between them
+  // MOBILE: single-article cards — finger-tracked 3D page-turn
   // ═══════════════════════════════════════════════════════════════
   if (isMobile) {
     const isFocused = focusedArticleIndex === spreadIndex;
     const activeZoom = isFocused ? zoomLevel : 0;
     const activeScale = baseScale + activeZoom * (1 - baseScale);
     const activeReading = activeZoom >= 0.85;
+
+    const showBehind = dragActiveRef.current || pageSnapState !== "idle";
+    const behindIdx = dragDirectionRef.current === 1 ? spreadIndex + 1 : spreadIndex - 1;
+    const behindValid = behindIdx >= 0 && behindIdx < items.length;
 
     return (
       <div
@@ -394,48 +387,78 @@ export default function MagazineSpread({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        style={{ perspective: 1000, position: "relative" }}
       >
-        {/* Single article card with slide animation — fills container, no nav inside */}
-        <style>{`.magazine-page-stack { position: relative; } .magazine-page-stack > :first-child { z-index: 10 !important; }`}</style>
-        <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden magazine-page-stack" style={{ perspective: 1000, position: "relative" }}>
-          <AnimatePresence custom={direction}>
-            <motion.div
-              key={spreadIndex}
-              custom={direction}
-              variants={{
-                exit: (dir: number) => ({ rotateY: dir * -170, opacity: 0.35 }),
-              }}
-              initial={{ rotateY: 0, opacity: 1 }}
-              animate={{ rotateY: 0, opacity: 1 }}
-              exit="exit"
-              transition={{ type: "spring", stiffness: 160, damping: 26 }}
-              className="w-full h-full bg-zinc-900 overflow-hidden border-4 relative cursor-pointer"
+        <style>{`.magazine-mobile-stack > :nth-child(2) { z-index: 10 !important; }`}</style>
+        <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden magazine-mobile-stack" style={{ position: "relative" }}>
+          {/* Behind card — revealed as current rotates away */}
+          {showBehind && behindValid && (
+            <div className="w-full h-full bg-zinc-900 overflow-hidden border-4" style={{
+              position: "absolute", inset: 0, zIndex: 1,
+              borderColor: "rgba(217, 119, 6, 0.4)",
+              boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
+            }}>
+              <ArticlePage item={items[behindIdx]} scrollable={false} />
+            </div>
+          )}
+
+          {/* Current card — rotates with finger in real-time, snaps on release */}
+          <motion.div
+            key={spreadIndex}
+            animate={{
+              rotateY:
+                pageSnapState === "committing" ? dragDirectionRef.current * -170 :
+                pageSnapState === "canceling" ? 0 :
+                dragOffset,
+              opacity: pageSnapState === "committing" ? 0.35 : 1,
+              scale: 1,
+            }}
+            transition={pageSnapState !== "idle"
+              ? { type: "spring", stiffness: 160, damping: 26 }
+              : { duration: 0 }}
+            className="w-full h-full bg-zinc-900 overflow-hidden border-4 cursor-pointer"
+            style={{
+              position: "absolute",
+              inset: 0,
+              transformOrigin: "left center",
+              boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
+              borderColor: `rgba(217, 119, 6, ${0.5 * (1 - activeZoom)})`,
+              backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+            }}
+            onClick={() => handlePageClick(spreadIndex)}
+            data-article-index={spreadIndex}
+            onAnimationComplete={() => {
+              if (pageSnapState === "committing") {
+                onSpreadIndexChange(spreadIndex + dragDirectionRef.current);
+                setDragOffset(0);
+                setPageSnapState("idle");
+                dragActiveRef.current = false;
+              } else if (pageSnapState === "canceling") {
+                setDragOffset(0);
+                setPageSnapState("idle");
+                dragActiveRef.current = false;
+              }
+            }}
+          >
+            <div
               style={{
-                position: "absolute",
-                inset: 0,
-                transformOrigin: "left center",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
-                borderColor: `rgba(217, 119, 6, ${0.5 * (1 - activeZoom)})`,
-                backfaceVisibility: "hidden",
-                WebkitBackfaceVisibility: "hidden",
+                transform: `scale(${activeScale})`,
+                transformOrigin: "top left",
+                width: `${(1 / activeScale) * 100}%`,
+                height: `${(1 / activeScale) * 100}%`,
+                pointerEvents: activeReading ? "auto" : "none",
+                transition: snapTimerRef.current ? "transform 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out" : "none",
               }}
-              onClick={() => handlePageClick(spreadIndex)}
-              data-article-index={spreadIndex}
             >
-              <div
-                style={{
-                  transform: `scale(${activeScale})`,
-                  transformOrigin: "top left",
-                  width: `${(1 / activeScale) * 100}%`,
-                  height: `${(1 / activeScale) * 100}%`,
-                  pointerEvents: activeReading ? "auto" : "none",
-                  transition: snapTimerRef.current ? "transform 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out" : "none",
-                }}
-              >
-                <ArticlePage item={items[spreadIndex]} scrollable={true} />
-              </div>
-            </motion.div>
-          </AnimatePresence>
+              <ArticlePage item={items[spreadIndex]} scrollable={true} />
+            </div>
+
+            {/* Gradient signal: scroll to read more — hide when zoomed */}
+            {!activeReading && (
+              <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
+            )}
+          </motion.div>
         </div>
       </div>
     );
@@ -478,8 +501,7 @@ export default function MagazineSpread({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* ── Finger-tracked 3D page-turn ── */}
-      <style>{`.magazine-desktop-parent > :nth-child(2) { z-index: 10 !important; }`}</style>
+      {/* ── Finger-tracked 3D page-turn (z-indices explicit: edge-strip=1, behind=5, current=10) ── */}
 
       {/* Behind spread — revealed as current page rotates away */}
       {(() => {
@@ -489,7 +511,7 @@ export default function MagazineSpread({
         const behind = spreads[behindIdx];
         if (!behind) return null;
         return (
-          <div className="flex items-stretch w-full h-full" style={{ position: "absolute", inset: 0, zIndex: 1 }}>
+          <div className="flex items-stretch w-full h-full" style={{ position: "absolute", inset: 0, zIndex: 5 }}>
             <div className="w-1/2 h-full bg-zinc-900 border-t border-b border-l flex items-center justify-center overflow-hidden"
               style={{ borderColor: "rgba(217, 119, 6, 0.4)" }}>
               <ArticlePage item={behind.left} scrollable={false} />
@@ -501,6 +523,39 @@ export default function MagazineSpread({
               {behind.right ? <ArticlePage item={behind.right} scrollable={false} /> : <span className="text-zinc-600 text-xs italic">—</span>}
             </div>
           </div>
+        );
+      })()}
+
+      {/* ── Previous page edge strip — turned page stays in DOM as thin sliver at left edge ── */}
+      {spreadIndex > 0 && spreads[spreadIndex - 1] && (() => {
+        const edgeSpread = spreads[spreadIndex - 1];
+        return (
+          <motion.div
+            className="flex items-stretch w-full h-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.35 }}
+            transition={{ duration: 0.4 }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 1,
+              transformOrigin: "left center",
+              transform: "rotateY(-170deg)",
+              backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+            }}
+          >
+            <div className="w-1/2 h-full bg-zinc-900 border-t border-b border-l flex items-center justify-center overflow-hidden"
+              style={{ borderColor: "rgba(217, 119, 6, 0.4)" }}>
+              <ArticlePage item={edgeSpread.left} scrollable={false} />
+            </div>
+            <div className="w-[6px] flex-shrink-0"
+              style={{ background: "linear-gradient(90deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.4) 100%)", boxShadow: "inset 0 0 6px rgba(0,0,0,0.8)" }} />
+            <div className="w-1/2 h-full bg-zinc-900 border-t border-b border-r flex items-center justify-center overflow-hidden"
+              style={{ borderColor: "rgba(217, 119, 6, 0.4)" }}>
+              {edgeSpread.right ? <ArticlePage item={edgeSpread.right} scrollable={false} /> : <span className="text-zinc-600 text-xs italic">—</span>}
+            </div>
+          </motion.div>
         );
       })()}
 
@@ -522,6 +577,7 @@ export default function MagazineSpread({
         style={{
           position: "absolute",
           inset: 0,
+          zIndex: 10,
           transformOrigin: "left center",
           transformStyle: "preserve-3d",
           backfaceVisibility: "hidden",
