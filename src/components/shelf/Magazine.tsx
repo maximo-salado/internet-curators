@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "@phosphor-icons/react";
+import Lottie from "lottie-react";
+import closeAnim from "@/../public/lottie/close-x.json";
 import type { IssueSummary } from "@/app/api/issues/route";
 import MagazineSpread from "./MagazineSpread";
 
@@ -53,6 +54,7 @@ export default function Magazine({
   const cardRef = useRef<HTMLButtonElement>(null);
   const [cardRect, setCardRect] = useState<DOMRect | null>(null);
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
+  const closeLottieRef = useRef<any>(null);
 
   // ── Pagination state (lifted from MagazineSpread) ──
   const [spreadIndex, setSpreadIndex] = useState(0);
@@ -461,6 +463,8 @@ export default function Magazine({
         <motion.button
           key="magazine-close"
           onClick={handleClose}
+          onMouseEnter={() => closeLottieRef.current?.play()}
+          onMouseLeave={() => closeLottieRef.current?.stop()}
           className="fixed z-[63] top-4 right-4 w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
           aria-label="Close magazine"
           initial={{ opacity: 0 }}
@@ -468,7 +472,13 @@ export default function Magazine({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2, delay: 0.15 }}
         >
-          <X size={28} />
+          <Lottie
+            lottieRef={closeLottieRef}
+            animationData={closeAnim}
+            loop={false}
+            autoplay={false}
+            style={{ width: 28, height: 28, filter: "invert(1)" }}
+          />
         </motion.button>
       </AnimatePresence>
     );

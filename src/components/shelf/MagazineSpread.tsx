@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
+import Lottie from "lottie-react";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import type { FeedItem } from "@/lib/compose-pages";
 import { ArticlePage } from "@/components/reader/ArticlePage";
+import pageTurnShadowAnim from "@/../public/lottie/page-turn-shadow.json";
+import spinnerAnim from "@/../public/lottie/spinner.json";
 
 interface IssueData {
   issue: { number: number; date: string; count: number; origin: string; isToday: boolean; published: boolean; leadImage?: string };
@@ -42,6 +45,8 @@ export default function MagazineSpread({
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const isZooming = useRef(false);
+  const mobileShadowLottieRef = useRef<any>(null);
+  const desktopShadowLottieRef = useRef<any>(null);
 
   // ── Page-turn drag state ──────────────────────────────────────
   const [dragOffset, setDragOffset] = useState(0);
@@ -117,6 +122,15 @@ export default function MagazineSpread({
   useEffect(() => {
     zoomRef.current = zoomLevel;
   }, [zoomLevel]);
+
+  // ── Drive page-turn shadow Lottie via dragOffset ──────────────
+  useEffect(() => {
+    const anim = mobileShadowLottieRef.current || desktopShadowLottieRef.current;
+    if (!anim) return;
+    const totalFrames = 100;
+    const frame = Math.round((Math.abs(dragOffset) / 170) * totalFrames);
+    anim.goToAndStop(frame, true);
+  }, [dragOffset]);
 
   // ── Report zoom changes up ───────────────────────────────────
   useEffect(() => {
@@ -350,7 +364,12 @@ export default function MagazineSpread({
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-black">
-        <div className="w-8 h-8 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+        <Lottie
+          animationData={spinnerAnim}
+          autoplay={true}
+          loop={true}
+          style={{ width: 32, height: 32, filter: "invert(0.6)" }}
+        />
       </div>
     );
   }
@@ -502,6 +521,22 @@ export default function MagazineSpread({
                 right: mobileIsForward ? undefined : 0,
                 width: 2,
                 background: "rgba(255,255,255,0.08)",
+              }}
+            />
+            {/* Lottie page-turn shadow enhancement */}
+            <Lottie
+              lottieRef={mobileShadowLottieRef}
+              animationData={pageTurnShadowAnim}
+              loop={false}
+              autoplay={false}
+              className="absolute top-0 bottom-0 pointer-events-none z-21"
+              style={{
+                left: mobileIsForward ? 0 : undefined,
+                right: mobileIsForward ? undefined : 0,
+                width: 28,
+                opacity: pageSnapState === "idle" ? 1 : 0,
+                transition: pageSnapState !== "idle" ? "opacity 0.3s ease-out" : "none",
+                mixBlendMode: "multiply" as any,
               }}
             />
           </motion.div>
@@ -687,6 +722,23 @@ export default function MagazineSpread({
               width: 2,
               background: "rgba(255,255,255,0.08)",
               zIndex: 25,
+            }}
+          />
+          {/* Lottie page-turn shadow enhancement */}
+          <Lottie
+            lottieRef={desktopShadowLottieRef}
+            animationData={pageTurnShadowAnim}
+            loop={false}
+            autoplay={false}
+            className="absolute top-0 bottom-0 pointer-events-none"
+            style={{
+              left: desktopIsForward ? 0 : undefined,
+              right: desktopIsForward ? undefined : 0,
+              width: 28,
+              opacity: pageSnapState === "idle" ? 1 : 0,
+              transition: pageSnapState !== "idle" ? "opacity 0.3s ease-out" : "none",
+              zIndex: 26,
+              mixBlendMode: "multiply" as any,
             }}
           />
 
