@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useEmblaCarousel from "embla-carousel-react";
 import { Calendar, List, X } from "@phosphor-icons/react";
-import Lottie from "lottie-react";
+import lottie from "lottie-web";
 import type { IssueSummary } from "@/app/api/issues/route";
 import Magazine from "./Magazine";
 import NavDrawer from "@/components/reader/NavDrawer";
@@ -54,6 +54,7 @@ export default function ShelfCarousel() {
   });
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const bookmarkRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -210,6 +211,19 @@ export default function ShelfCarousel() {
     if (num !== openIssueNumber) setOpenIssueNumber(num);
   }, [searchParams]);
 
+  // Bookmark lottie animation
+  useEffect(() => {
+    if (!bookmarkRef.current) return;
+    const anim = lottie.loadAnimation({
+      container: bookmarkRef.current,
+      animationData: bookmarkAnim,
+      renderer: "svg",
+      loop: true,
+      autoplay: true,
+    });
+    return () => anim.destroy();
+  }, []);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-black">
@@ -322,12 +336,7 @@ export default function ShelfCarousel() {
             href={resumeData.href}
             className="pointer-events-auto inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-800 text-amber-400 rounded-full text-base font-medium hover:bg-zinc-700 hover:text-amber-300 transition-colors shadow-lg shadow-black/40 border border-zinc-700/50"
           >
-            <Lottie
-              animationData={bookmarkAnim}
-              loop={true}
-              autoplay={true}
-              style={{ width: 16, height: 16 }}
-            />
+            <div ref={bookmarkRef} style={{ width: 16, height: 16 }} />
             <span>Continue where you left →</span>
           </a>
         </div>
