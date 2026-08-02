@@ -41,6 +41,7 @@ export default function Magazine({
   }, [isOpen, phase]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
     pointerDown.current = { x: e.clientX, y: e.clientY };
   }, []);
 

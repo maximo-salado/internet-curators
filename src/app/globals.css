@@ -18,15 +18,15 @@
   --text-muted: #a1a1aa; /* zinc-400 */
   --text-dim: #71717a; /* zinc-500 */
 
-  /* Accent tokens */
-  --accent-400: #fbbf24; /* amber-400 */
-  --accent-500: #f59e0b; /* amber-500 */
-  --accent-600: #d97706; /* amber-600 */
+  /* Accent tokens — zinc grayscale (pure black & white brand) */
+  --accent-400: #a1a1aa; /* zinc-400 */
+  --accent-500: #71717a; /* zinc-500 */
+  --accent-600: #52525b; /* zinc-600 */
 
   /* Border tokens */
   --border-subtle: rgba(255, 255, 255, 0.05);
   --border-default: rgba(255, 255, 255, 0.1);
-  --border-accent: rgba(217, 119, 6, 0.5); /* amber-600/50 */
+  --border-accent: rgba(161, 161, 170, 0.3); /* zinc-400/30 */
 
   /* Border radius scale */
   --radius-sm: 4px;

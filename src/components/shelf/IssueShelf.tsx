@@ -302,8 +302,8 @@ export default function IssueShelf() {
                   ))}
                   {/* Ghost placeholder for next day — current week only */}
                   {week.days.some((d) => d.isToday) && weekIdx === weeks.length - 1 && week.days.some((d) => d.issue) && (
-                    <div className="relative flex flex-col items-center justify-center w-full rounded-lg border-2 border-dashed border-amber-800/30 bg-zinc-900/30 aspect-[2/3] opacity-60">
-                      <span className="text-xs text-amber-700/60 uppercase tracking-wider">Coming</span>
+                    <div className="relative flex flex-col items-center justify-center w-full rounded-lg border-2 border-dashed border-zinc-700/30 bg-zinc-900/30 aspect-[2/3] opacity-60">
+                      <span className="text-xs text-zinc-500/60 uppercase tracking-wider">Coming</span>
                       <span className="text-xs text-zinc-400 mt-0.5">tomorrow</span>
                     </div>
                   )}
@@ -324,7 +324,7 @@ export default function IssueShelf() {
                   emblaApi?.scrollTo(idx);
                 }}
                 className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                  idx === currentWeekIdx ? "bg-amber-600/70" : "bg-zinc-700"
+                  idx === currentWeekIdx ? "bg-zinc-400/70" : "bg-zinc-700"
                 }`}
                 aria-label={`Week ${idx + 1}`}
               />

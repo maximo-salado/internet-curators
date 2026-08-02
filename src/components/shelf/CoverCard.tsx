@@ -32,9 +32,9 @@ export default function CoverCard({ day, isFinished, onClick }: CoverCardProps) 
       data-issue-number={issue.number}
       className={`relative flex flex-col items-center justify-end w-full rounded-lg border transition-all overflow-hidden aspect-[2/3]
         ${isToday
-          ? "border-amber-600/50 bg-zinc-900"
+          ? "border-zinc-400/50 bg-zinc-900"
           : isFinished
-          ? "border-amber-700/30 bg-zinc-900/80"
+          ? "border-zinc-500/30 bg-zinc-900/80"
           : "border-zinc-800/60 bg-zinc-950"
         }
         hover:border-zinc-600`}
@@ -68,11 +68,11 @@ export default function CoverCard({ day, isFinished, onClick }: CoverCardProps) 
       </div>
 
       {isToday && (
-        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-600/60 rounded-b-lg" />
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-zinc-400/60 rounded-b-lg" />
       )}
 
       {isFinished && !isToday && (
-        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-700/30 rounded-b-lg" />
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-zinc-500/30 rounded-b-lg" />
       )}
     </button>
   );
