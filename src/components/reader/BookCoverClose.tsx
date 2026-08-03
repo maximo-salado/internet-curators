@@ -85,7 +85,7 @@ export default function BookCoverClose({ coverImage, issueNumber, onComplete }: 
       >
         {/* Page behind the cover */}
         <div
-          className="absolute inset-0 overflow-hidden bg-zinc-900"
+          className="absolute inset-0 overflow-hidden bg-[var(--reader-bg)]"
           style={{ boxShadow: "inset 10px 0 28px rgba(0,0,0,0.5)" }}
         >
           <div className="flex h-full w-full flex-col items-center justify-center gap-2">

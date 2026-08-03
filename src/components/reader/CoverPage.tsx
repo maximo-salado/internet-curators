@@ -5,7 +5,7 @@ interface CoverPageProps {
 export default function CoverPage({ coverImage }: CoverPageProps) {
   return (
     <div
-      className="flex flex-col items-center justify-center h-full w-full bg-black text-zinc-100 select-none"
+      className="flex flex-col items-center justify-center h-full w-full bg-[var(--reader-bg)] text-zinc-100 select-none"
       style={
         coverImage
           ? { backgroundImage: `url(${coverImage})`, backgroundSize: "cover", backgroundPosition: "center" }

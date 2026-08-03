@@ -151,7 +151,7 @@ export function ArticlePage({ item, scrollable = true }: ArticlePageProps) {
 
   return (
     <div
-      className="h-full bg-black text-zinc-100 overflow-y-auto"
+      className="h-full bg-[var(--reader-bg)] text-zinc-100 overflow-y-auto subtle-scroll"
       data-scroll-container="true"
     >
       <div className="mx-auto max-w-2xl px-5 pt-20 pb-16 sm:px-6">
