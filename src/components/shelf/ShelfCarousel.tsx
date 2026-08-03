@@ -130,6 +130,26 @@ export default function ShelfCarousel() {
   useEffect(() => {
     if (!emblaApi || shelfItems.length === 0 || initializedRef.current) return;
     initializedRef.current = true;
+
+    // If we just closed a magazine, land on that exact issue (instantly, since
+    // the book-close animation already played) instead of the default latest.
+    let closeFrom: string | null = null;
+    try {
+      closeFrom = sessionStorage.getItem("mag-close-from");
+      if (closeFrom) sessionStorage.removeItem("mag-close-from");
+    } catch {}
+
+    if (closeFrom) {
+      const num = Number(closeFrom);
+      const idx = shelfItems.findIndex(
+        (item) => item.kind === "issue" && item.issue.number === num,
+      );
+      if (idx !== -1) {
+        emblaApi.scrollTo(idx, true); // jump=true → no scroll animation
+        return;
+      }
+    }
+
     emblaApi.scrollTo(shelfItems.length - 2);
   }, [emblaApi, shelfItems.length]);
 
