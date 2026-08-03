@@ -419,6 +419,7 @@ export default function ShelfCarousel() {
           <BookCoverOpen
             issue={resumeIssue}
             originRect={bookmarkRect}
+            simultaneous
             onComplete={() => router.push(resumeData.href)}
           />,
           document.body,

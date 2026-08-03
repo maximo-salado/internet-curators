@@ -14,6 +14,9 @@ interface Props {
   issue: IssueSummary;
   originRect?: Rect | null;
   onComplete: () => void;
+  /** Run the rise/zoom and the cover-open concurrently (one motion) instead of
+   *  sequentially. Used by the bookmark "continue" animation. */
+  simultaneous?: boolean;
 }
 
 /**
@@ -24,9 +27,19 @@ interface Props {
  * Pure CSS transforms — no Lottie. Caller portals this to <body> so it escapes
  * the shelf's perspective/preserve-3d/overflow-hidden ancestors.
  */
-export default function BookCoverOpen({ issue, originRect, onComplete }: Props) {
+export default function BookCoverOpen({
+  issue,
+  originRect,
+  onComplete,
+  simultaneous = false,
+}: Props) {
   const [step, setStep] = useState(0);
   const done = useRef(false);
+
+  // Sequential: rotate (780ms) then zoom (460ms). Simultaneous: both at once.
+  const rotMs = simultaneous ? 640 : 780;
+  const zoomMs = simultaneous ? 640 : 460;
+  const zoomEase = simultaneous ? "cubic-bezier(0.33,0,0.15,1)" : "ease-in";
 
   const finish = () => {
     if (done.current) return;
@@ -58,7 +71,8 @@ export default function BookCoverOpen({ issue, originRect, onComplete }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const zoomed = step === 2;
+  // Simultaneous: zoom starts with the open (step 1). Sequential: after (step 2).
+  const zoomed = simultaneous ? step >= 1 : step === 2;
 
   return (
     <div className="fixed inset-0 z-[60] bg-black" style={{ perspective: "1600px" }}>
@@ -73,8 +87,7 @@ export default function BookCoverOpen({ issue, originRect, onComplete }: Props) 
           width: zoomed ? "100vw" : base.width,
           height: zoomed ? "100vh" : base.height,
           transformStyle: "preserve-3d",
-          transition:
-            "left 460ms ease-in, top 460ms ease-in, width 460ms ease-in, height 460ms ease-in",
+          transition: `left ${zoomMs}ms ${zoomEase}, top ${zoomMs}ms ${zoomEase}, width ${zoomMs}ms ${zoomEase}, height ${zoomMs}ms ${zoomEase}`,
         }}
       >
         {/* Revealed first page (behind the cover). Kept near-black to match the
@@ -93,14 +106,14 @@ export default function BookCoverOpen({ issue, originRect, onComplete }: Props) 
             the clear "opening" beat before the page zooms up. */}
         <div
           onTransitionEnd={(e) => {
-            if (step === 1 && e.propertyName === "transform") setStep(2);
+            if (!simultaneous && step === 1 && e.propertyName === "transform") setStep(2);
           }}
           style={{
             position: "absolute",
             inset: 0,
             transformOrigin: "left center",
             transform: step >= 1 ? "rotateY(-180deg)" : "rotateY(0deg)",
-            transition: "transform 780ms cubic-bezier(0.33, 0, 0.15, 1)",
+            transition: `transform ${rotMs}ms cubic-bezier(0.33, 0, 0.15, 1)`,
             transformStyle: "preserve-3d",
             willChange: "transform",
           }}
