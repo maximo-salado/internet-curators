@@ -15,13 +15,18 @@ type ShelfItem =
   | { kind: "placeholder"; label: string }
   | { kind: "prevWeek"; label: string };
 
+// Cache issues across mounts so returning to the shelf (e.g. after closing a
+// magazine) renders instantly instead of flashing a "Loading shelf…" screen.
+let cachedIssues: IssueSummary[] | null = null;
+
 export default function ShelfCarousel() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialIssue = searchParams.get("issue");
 
-  const [issues, setIssues] = useState<IssueSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [issues, setIssues] = useState<IssueSummary[]>(cachedIssues ?? []);
+  const [loading, setLoading] = useState(cachedIssues === null);
+  const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [openIssueNumber, setOpenIssueNumber] = useState<number | null>(
     initialIssue ? Number(initialIssue) : null,
@@ -66,7 +71,8 @@ export default function ShelfCarousel() {
       })
       .then((data) => {
         if (cancelled) return;
-        setIssues(data.issues as IssueSummary[]);
+        cachedIssues = data.issues as IssueSummary[];
+        setIssues(cachedIssues);
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
@@ -76,6 +82,14 @@ export default function ShelfCarousel() {
       });
     return () => { cancelled = true; };
   }, []);
+
+  // Fade the shelf in once mounted — smooths the return-from-close hand-off
+  // (which lands on black showing the closing cover) into the shelf.
+  useEffect(() => {
+    if (loading) return;
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
+  }, [loading]);
 
   const months = useMemo(() => {
     const seen = new Set<string>();
@@ -261,7 +275,7 @@ export default function ShelfCarousel() {
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-black text-zinc-100">
+    <div className={`flex flex-col h-full w-full bg-black text-zinc-100 transition-opacity duration-300 ${ready ? "opacity-100" : "opacity-0"}`}>
       {/* Header: [hamburger] [centered logo] [calendar icon] */}
       <header className="fixed top-0 inset-x-0 z-40 h-16 flex items-center px-4">
         <div className="flex-1 flex justify-start">
