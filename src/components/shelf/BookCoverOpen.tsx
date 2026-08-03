@@ -77,18 +77,20 @@ export default function BookCoverOpen({ issue, originRect, onComplete }: Props) 
             "left 460ms ease-in, top 460ms ease-in, width 460ms ease-in, height 460ms ease-in",
         }}
       >
-        {/* Revealed first page (behind the cover) */}
+        {/* Revealed first page (behind the cover). Kept near-black to match the
+            reader's loading screen so the hand-off doesn't flash/jar. */}
         <div
-          className="absolute inset-0 overflow-hidden bg-zinc-900"
-          style={{ boxShadow: "inset 10px 0 28px rgba(0,0,0,0.5)" }}
+          className="absolute inset-0 overflow-hidden bg-black"
+          style={{ boxShadow: "inset 12px 0 32px rgba(0,0,0,0.7)" }}
         >
           <div className="flex h-full w-full flex-col items-center justify-center gap-2">
-            <span className="font-serif text-5xl font-bold text-zinc-600">#{issue.number}</span>
-            <span className="text-xs uppercase tracking-[0.25em] text-zinc-500">Issue</span>
+            <span className="font-serif text-5xl font-bold text-zinc-800">#{issue.number}</span>
+            <span className="text-xs uppercase tracking-[0.25em] text-zinc-700">Issue</span>
           </div>
         </div>
 
-        {/* Cover — hinges open on the left spine */}
+        {/* Cover — hinges fully open on the left spine (flat, not left ajar), as
+            the clear "opening" beat before the page zooms up. */}
         <div
           onTransitionEnd={(e) => {
             if (step === 1 && e.propertyName === "transform") setStep(2);
@@ -97,9 +99,10 @@ export default function BookCoverOpen({ issue, originRect, onComplete }: Props) 
             position: "absolute",
             inset: 0,
             transformOrigin: "left center",
-            transform: step >= 1 ? "rotateY(-168deg)" : "rotateY(0deg)",
-            transition: "transform 720ms cubic-bezier(0.42, 0.04, 0.22, 1)",
+            transform: step >= 1 ? "rotateY(-180deg)" : "rotateY(0deg)",
+            transition: "transform 780ms cubic-bezier(0.33, 0, 0.15, 1)",
             transformStyle: "preserve-3d",
+            willChange: "transform",
           }}
         >
           {/* Front face — cover artwork (matches the shelf card) */}
