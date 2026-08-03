@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Keyboard } from "swiper/modules";
+import { Navigation, Keyboard, EffectCreative } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
 import type { Page } from "@/lib/compose-pages";
 import {
@@ -23,6 +23,7 @@ import ClosingPage from "@/components/reader/ClosingPage";
 import TocDrawer from "@/components/reader/TocDrawer";
 import NavDrawer from "@/components/reader/NavDrawer";
 import "swiper/css";
+import "swiper/css/effect-creative";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -92,8 +93,24 @@ export default function SwipeStack({
     <div className="relative">
       {/* Swiper carousel */}
       <Swiper
-        modules={[Navigation, Keyboard]}
+        modules={[Navigation, Keyboard, EffectCreative]}
         direction="horizontal"
+        effect="creative"
+        creativeEffect={{
+          // Page-turn feel: the outgoing page hinges away on its left (spine)
+          // edge in 3D while the next page slides up from beneath/right.
+          perspective: true,
+          limitProgress: 1,
+          prev: {
+            shadow: true,
+            origin: "left center",
+            translate: ["-8%", 0, -80],
+            rotate: [0, 78, 0],
+          },
+          next: {
+            translate: ["100%", 0, 0],
+          },
+        }}
         initialSlide={startIndex}
         onSlideChange={(swiper) => {
           setSelectedIndex(swiper.activeIndex);
