@@ -104,8 +104,8 @@ export default function SwipeStack({
           prev: {
             shadow: true,
             origin: "left center",
-            translate: ["-8%", 0, -80],
-            rotate: [0, 78, 0],
+            translate: ["-12%", 0, 0],
+            rotate: [0, -82, 0],
           },
           next: {
             translate: ["100%", 0, 0],
