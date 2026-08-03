@@ -296,11 +296,11 @@ export default function ShelfCarousel() {
             {shelfItems.map((item) => {
               if (item.kind === "prevWeek") {
                 return (
-                  <div key="prev-week" className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_60%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
+                  <div key="prev-week" className="pointer-events-none flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_60%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
                     <div className="embla__tilt w-full h-full" style={{ transformStyle: "preserve-3d" }}>
                       <button
                         onClick={scrollToPrevWeek}
-                        className="relative flex flex-col items-center justify-center w-full aspect-[2/3] rounded-lg border border-dashed border-zinc-500/40 bg-zinc-800/80 hover:border-zinc-400/60 hover:bg-zinc-800 active:scale-[0.98] transition-all cursor-pointer"
+                        className="pointer-events-auto relative flex flex-col items-center justify-center w-full aspect-[2/3] rounded-lg border border-dashed border-zinc-500/40 bg-zinc-800/80 hover:border-zinc-400/60 hover:bg-zinc-800 active:scale-[0.98] transition-all cursor-pointer"
                         style={{ transformStyle: "preserve-3d", boxShadow: "0 0 30px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04)" }}
                       >
                         <div className="flex flex-col items-center gap-2 px-4 text-center">
@@ -315,7 +315,7 @@ export default function ShelfCarousel() {
 
               if (item.kind === "placeholder") {
                 return (
-                  <div key="tomorrow" className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_60%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
+                  <div key="tomorrow" className="pointer-events-none flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_60%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
                     <div className="embla__tilt w-full h-full" style={{ transformStyle: "preserve-3d" }}>
                       <div
                         className="relative flex flex-col items-center justify-center w-full aspect-[2/3] rounded-lg border border-dashed border-zinc-500/40 bg-zinc-800/80"

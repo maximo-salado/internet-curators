@@ -65,14 +65,14 @@ export default function Magazine({ issue, isOpen, onRequestOpen }: MagazineProps
 
   return (
     <>
-      <div className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_60%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
+      <div className="pointer-events-none flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_60%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
         <div className="embla__tilt w-full h-full" style={{ transformStyle: "preserve-3d" }}>
           <button
             ref={cardRef}
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             data-issue-number={issue.number}
-            className={`relative flex flex-col items-center justify-end w-full aspect-[2/3] rounded-xl border-4 transition-all overflow-hidden
+            className={`pointer-events-auto relative flex flex-col items-center justify-end w-full aspect-[2/3] rounded-xl border-4 transition-all overflow-hidden
               ${isOpen ? "border-zinc-400/60 bg-zinc-800" : "border-zinc-400/50 bg-zinc-800 hover:border-zinc-300/70"}
             `}
             style={{ transformStyle: "preserve-3d", boxShadow: "0 4px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)" }}
