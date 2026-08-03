@@ -141,7 +141,13 @@ export default function SwipeStack({
         style={{ height: "100dvh", width: "100%" }}
       >
         {pages.map((page, i) => (
-          <SwiperSlide key={i}>{renderPage(page)}</SwiperSlide>
+          <SwiperSlide
+            key={i}
+            className="bg-black"
+            style={{ boxShadow: "inset 0 0 0 1px rgba(161,161,170,0.28)" }}
+          >
+            {renderPage(page)}
+          </SwiperSlide>
         ))}
       </Swiper>
 
