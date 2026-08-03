@@ -18,7 +18,6 @@ import CoverPage from "@/components/reader/CoverPage";
 import { ContextPage } from "@/components/reader/ContextPage";
 import { ArticlePage } from "@/components/reader/ArticlePage";
 import { SectionPage } from "@/components/reader/SectionPage";
-import EditorPage from "@/components/reader/EditorPage";
 import ClosingPage from "@/components/reader/ClosingPage";
 import TocDrawer from "@/components/reader/TocDrawer";
 import NavDrawer from "@/components/reader/NavDrawer";
@@ -53,6 +52,7 @@ export default function SwipeStack({
   const router = useRouter();
   // -- local state --
   const [selectedIndex, setSelectedIndex] = useState(startIndex);
+  const [turning, setTurning] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -76,13 +76,18 @@ export default function SwipeStack({
       case "cover":
         return <CoverPage coverImage={page.coverImage} />;
       case "context":
-        return <ContextPage />;
+        return (
+          <ContextPage
+            issueNumber={issueNumber}
+            issueDate={issueDate}
+            pages={pages}
+            onNavigate={(index) => swiperRef.current?.slideTo(index)}
+          />
+        );
       case "article":
         return <ArticlePage item={page.item} />;
       case "section":
         return <SectionPage topics={page.topics} />;
-      case "editor":
-        return <EditorPage />;
       case "closing":
         return <ClosingPage count={page.count} />;
     }
@@ -93,9 +98,19 @@ export default function SwipeStack({
     <div className="relative">
       {/* Swiper carousel */}
       <Swiper
+        className={turning ? "rmag-turning" : undefined}
         modules={[Navigation, Keyboard, EffectCreative]}
         direction="horizontal"
         effect="creative"
+        onSliderMove={() => setTurning(true)}
+        onTransitionStart={() => setTurning(true)}
+        onTransitionEnd={() => setTurning(false)}
+        onTouchEnd={() => {
+          // if the release doesn't trigger a snap transition, clear the flag
+          requestAnimationFrame(() => {
+            if (!swiperRef.current?.animating) setTurning(false);
+          });
+        }}
         creativeEffect={{
           // Page-turn feel: the outgoing page hinges away on its left (spine)
           // edge in 3D while the next page slides up from beneath/right.
@@ -141,11 +156,7 @@ export default function SwipeStack({
         style={{ height: "100dvh", width: "100%" }}
       >
         {pages.map((page, i) => (
-          <SwiperSlide
-            key={i}
-            className="bg-black"
-            style={{ boxShadow: "inset 0 0 0 1px rgba(161,161,170,0.28)" }}
-          >
+          <SwiperSlide key={i} className="bg-[var(--reader-bg)]">
             {renderPage(page)}
           </SwiperSlide>
         ))}
