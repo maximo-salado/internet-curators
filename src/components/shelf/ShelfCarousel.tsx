@@ -200,11 +200,6 @@ export default function ShelfCarousel() {
     router.push(`/issues?issue=${issueNumber}`, { scroll: false });
   }, [router]);
 
-  const handleClose = useCallback(() => {
-    setOpenIssueNumber(null);
-    router.push("/issues", { scroll: false });
-  }, [router]);
-
   useEffect(() => {
     const issueParam = searchParams.get("issue");
     const num = issueParam ? Number(issueParam) : null;
@@ -324,7 +319,6 @@ export default function ShelfCarousel() {
                   index={issue.number - 1}
                   isOpen={openIssueNumber === issue.number}
                   onRequestOpen={() => handleOpen(issue.number)}
-                  onRequestClose={handleClose}
                 />
               );
             })}
