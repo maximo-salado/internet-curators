@@ -169,3 +169,38 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Subtle overlay scrollbar — only the thin thumb shows, no track */
+.subtle-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(161, 161, 170, 0.32) transparent;
+}
+.subtle-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.subtle-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.subtle-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(161, 161, 170, 0.28);
+  border-radius: 9999px;
+}
+.subtle-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(161, 161, 170, 0.5);
+}
+
+/* Reader surface — a touch lighter than the pure-black shelf so the reader
+   reads as elevated above it. Tune this one value. */
+:root {
+  --reader-bg: #131316;
+}
+
+/* Page-turn seam: only while a page is turning, define the turning page's
+   right (leading) edge so it doesn't blend into the next page. 1px zinc
+   hairline for crisp separation + a soft inner shadow gradient for depth. */
+.rmag-turning .swiper-slide {
+  box-shadow:
+    inset -1px 0 0 0 rgba(161, 161, 170, 0.55),
+    inset -18px 0 24px -16px rgba(0, 0, 0, 0.85);
+}
