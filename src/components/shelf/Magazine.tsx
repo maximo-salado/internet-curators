@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import lottie from "lottie-web";
 import type { IssueSummary } from "@/app/api/issues/route";
 import closeAnim from "@/lottie/close-x.json";
 
-const LottieOpen = dynamic(() => import("./LottieOpen"), { ssr: false });
+import BookCoverOpen from "./BookCoverOpen";
+
 const LottieClose = dynamic(() => import("./LottieClose"), { ssr: false });
 
 interface MagazineProps {
@@ -28,13 +30,28 @@ export default function Magazine({
 }: MagazineProps) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("closed");
+  const [originRect, setOriginRect] = useState<{
+    left: number; top: number; width: number; height: number;
+  } | null>(null);
+  const cardRef = useRef<HTMLButtonElement>(null);
   const closeLottieRef = useRef<HTMLDivElement>(null);
   const closeAnimRef = useRef<ReturnType<typeof lottie.loadAnimation> | null>(null);
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    if (isOpen && phase === "closed") setPhase("opening");
-  }, [isOpen, phase]);
+    if (isOpen && phase === "closed") {
+      // capture the tapped card's on-screen box so the book-open can grow
+      // out of it (shared-element feel) instead of popping in at a fixed size
+      if (cardRef.current) {
+        const r = cardRef.current.getBoundingClientRect();
+        setOriginRect({ left: r.left, top: r.top, width: r.width, height: r.height });
+      }
+      // warm the reader route so the book-open animation masks the load.
+      // page=2 → slide index 1 (first content page); cover stays as index 0.
+      router.prefetch(`/issue/${issue.number}?page=2`);
+      setPhase("opening");
+    }
+  }, [isOpen, phase, router, issue.number]);
 
   useEffect(() => {
     if (!isOpen && phase === "opening") setPhase("closing");
@@ -60,7 +77,8 @@ export default function Magazine({
   );
 
   const handleOpenComplete = useCallback(() => {
-    router.push(`/issue/${issue.number}?page=0`);
+    // land on the first content page (index 1); swipe right → cover (index 0)
+    router.push(`/issue/${issue.number}?page=2`);
   }, [router, issue.number]);
 
   const handleCloseComplete = useCallback(() => {
@@ -79,7 +97,7 @@ export default function Magazine({
         animationData: closeAnim,
         renderer: "svg",
         loop: false,
-        autoplay: false,
+        autoplay: true,
       });
       closeAnimRef.current = anim;
       return () => anim.destroy();
@@ -91,6 +109,7 @@ export default function Magazine({
       <div className="flex-[0_0_70%] sm:flex-[0_0_48%] md:flex-[0_0_60%] lg:flex-[0_0_26%] xl:flex-[0_0_20%] min-w-0 px-1.5 first:pl-4 last:pr-4 embla__slide">
         <div className="embla__tilt w-full h-full" style={{ transformStyle: "preserve-3d" }}>
           <button
+            ref={cardRef}
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             data-issue-number={issue.number}
@@ -123,24 +142,36 @@ export default function Magazine({
         </div>
       </div>
 
-      {phase === "opening" && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black">
-          <LottieOpen onComplete={handleOpenComplete} />
-        </div>
-      )}
+      {/* Overlays are portaled to <body>: rendered in place they'd inherit the
+          shelf's perspective/preserve-3d/overflow-hidden ancestors, which trap
+          `position: fixed` inside the transformed container instead of the
+          viewport (so the "fullscreen" overlay would be clipped and skewed). */}
+      {phase === "opening" &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <BookCoverOpen
+            issue={issue}
+            originRect={originRect}
+            onComplete={handleOpenComplete}
+          />,
+          document.body,
+        )}
 
-      {phase === "closing" && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black">
-          <LottieClose onComplete={handleCloseComplete} />
-          <button
-            onClick={handleClose}
-            className="fixed z-[63] top-4 right-4 w-12 h-12 flex items-center justify-center"
-            aria-label="Close"
-          >
-            <div ref={closeLottieRef} style={{ width: 24, height: 24 }} />
-          </button>
-        </div>
-      )}
+      {phase === "closing" &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black">
+            <LottieClose onComplete={handleCloseComplete} />
+            <button
+              onClick={handleClose}
+              className="fixed z-[63] top-4 right-4 w-12 h-12 flex items-center justify-center"
+              aria-label="Close"
+            >
+              <div ref={closeLottieRef} style={{ width: 24, height: 24 }} />
+            </button>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

@@ -211,9 +211,12 @@ export default function ShelfCarousel() {
     if (num !== openIssueNumber) setOpenIssueNumber(num);
   }, [searchParams]);
 
-  // Bookmark lottie animation
+  // Bookmark lottie animation.
+  // Depends on [loading, resumeData]: on first mount `loading` is true so the
+  // CTA (and its ref) isn't rendered yet — the effect must re-run once loading
+  // finishes and the bookmark container actually exists.
   useEffect(() => {
-    if (!bookmarkRef.current) return;
+    if (loading || !resumeData || !bookmarkRef.current) return;
     const anim = lottie.loadAnimation({
       container: bookmarkRef.current,
       animationData: bookmarkAnim,
@@ -222,7 +225,7 @@ export default function ShelfCarousel() {
       autoplay: true,
     });
     return () => anim.destroy();
-  }, []);
+  }, [loading, resumeData]);
 
   if (loading) {
     return (

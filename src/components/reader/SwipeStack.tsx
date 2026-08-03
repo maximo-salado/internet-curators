@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Keyboard } from "swiper/modules";
@@ -12,6 +13,7 @@ import {
   SquaresFour,
   DotsThree,
 } from "@phosphor-icons/react";
+import BookCoverClose from "@/components/reader/BookCoverClose";
 import CoverPage from "@/components/reader/CoverPage";
 import { ContextPage } from "@/components/reader/ContextPage";
 import { ArticlePage } from "@/components/reader/ArticlePage";
@@ -52,6 +54,11 @@ export default function SwipeStack({
   const [selectedIndex, setSelectedIndex] = useState(startIndex);
   const [tocOpen, setTocOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  // Cover art for the close animation (page 0 is always the cover)
+  const coverPage = pages.find((p) => p.type === "cover");
+  const coverImage = coverPage?.type === "cover" ? coverPage.coverImage : undefined;
 
   // -- sync URL on slide change --
   useEffect(() => {
@@ -129,8 +136,10 @@ export default function SwipeStack({
       <header className="fixed top-0 inset-x-0 z-40 h-14 flex items-center justify-between px-4">
         <button
           onClick={() => {
+            if (closing) return;
             sessionStorage.setItem("mag-close-from", String(issueNumber));
-            router.push("/issues");
+            router.prefetch("/issues");
+            setClosing(true);
           }}
           className="flex h-10 w-10 items-center justify-center text-zinc-300 hover:text-white transition-colors"
           aria-label="Back to shelf"
@@ -190,6 +199,18 @@ export default function SwipeStack({
       />
       {/* Nav drawer */}
       <NavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
+
+      {/* Book-close animation → shelf (mirror of the open) */}
+      {closing &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <BookCoverClose
+            coverImage={coverImage}
+            issueNumber={issueNumber}
+            onComplete={() => router.push("/issues")}
+          />,
+          document.body,
+        )}
     </div>
   );
 }
