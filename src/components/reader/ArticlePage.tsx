@@ -13,6 +13,7 @@ interface SourceInfo {
 
 interface ArticlePageProps {
   item: FeedItem;
+  scrollable?: boolean;
 }
 
 function formatDate(dateStr: string): string {
@@ -62,7 +63,7 @@ function stripHtml(html: string): string {
     .replace(/&#39;/g, "'");
 }
 
-export function ArticlePage({ item }: ArticlePageProps) {
+export function ArticlePage({ item, scrollable = true }: ArticlePageProps) {
   const plainSnippet = useMemo(
     () => stripHtml(item.contentSnippet),
     [item.contentSnippet],
@@ -123,32 +124,38 @@ export function ArticlePage({ item }: ArticlePageProps) {
       : "";
   }, [sourceInfo?.site_url, item.sourceUrl]);
 
-  // Hide images until they load; show alt text only on genuine failure
+  // Hide images until they load; show alt text only on genuine failure.
+  // Must check img.complete before adding the listener — cached images fire
+  // "load" before the effect runs, so they would stay hidden forever otherwise.
   useEffect(() => {
     if (!sanitizedContent || !articleRef.current) return;
     const imgs = articleRef.current.querySelectorAll("img");
     imgs.forEach((img) => {
-      (img as HTMLImageElement).style.display = "none";
-      img.addEventListener(
-        "load",
-        () => {
-          (img as HTMLImageElement).style.display = "";
-        },
-        { once: true },
-      );
-      img.addEventListener(
-        "error",
-        () => {
-          (img as HTMLImageElement).style.display = "";
-        },
-        { once: true },
-      );
+      const el = img as HTMLImageElement;
+      if (el.complete) return; // already loaded (cache hit) — leave visible
+      el.style.display = "none";
+      const show = () => { el.style.display = ""; };
+      img.addEventListener("load", show, { once: true });
+      img.addEventListener("error", show, { once: true });
+    });
+  }, [sanitizedContent]);
+
+  // Force all links inside article content to open in a new tab safely.
+  useEffect(() => {
+    if (!sanitizedContent || !articleRef.current) return;
+    articleRef.current.querySelectorAll("a").forEach((a) => {
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener noreferrer");
     });
   }, [sanitizedContent]);
 
   return (
-    <div className="h-full overflow-y-auto bg-black text-zinc-100">
+    <div
+      className="h-full bg-[var(--reader-bg)] text-zinc-100 overflow-y-auto subtle-scroll"
+      data-scroll-container="true"
+    >
       <div className="mx-auto max-w-2xl px-5 pt-20 pb-16 sm:px-6">
+
         {/* Title */}
         <h1 className="text-[2.5rem] font-bold leading-tight font-serif mb-5">
           {item.title}
@@ -159,10 +166,10 @@ export function ArticlePage({ item }: ArticlePageProps) {
           href={item.link}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-2 inline-block text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="mt-2 inline-block text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
         >
           {item.sourceTitle}
-          <span className="mx-1.5 text-zinc-700">·</span>
+          <span className="mx-1.5 text-zinc-500">·</span>
           {formatDate(item.pubDate)}
         </a>
 
@@ -207,6 +214,7 @@ export function ArticlePage({ item }: ArticlePageProps) {
           >
             Read full article →
             <svg
+              aria-hidden="true"
               width="14"
               height="14"
               viewBox="0 0 24 24"
@@ -234,7 +242,7 @@ export function ArticlePage({ item }: ArticlePageProps) {
             </div>
           ) : sourceInfo ? (
             <a
-              href={sourceInfo.site_url || item.sourceUrl}
+              href={sourceInfo.site_url || item.sourceUrl || "#"}
               target="_blank"
               rel="noopener noreferrer"
               className="block rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 transition-colors hover:border-zinc-700 hover:bg-zinc-900"

@@ -67,7 +67,7 @@ export function ReadingStats({ loadedCount }: ReadingStatsProps) {
   if (!stats || loadedCount < 60 || stats.count === 0) return null;
 
   return (
-    <p className="text-center text-xs text-zinc-600 py-2">
+    <p className="text-center text-sm text-zinc-600 py-2">
       You have read {stats.count} article{stats.count !== 1 ? "s" : ""} this week across{" "}
       {stats.sources.length} source{stats.sources.length !== 1 ? "s" : ""}
     </p>

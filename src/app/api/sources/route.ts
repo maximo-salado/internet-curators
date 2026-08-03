@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ensureCurator, generateSlug } from "@/lib/db-helpers";
+import { validateFeedUrl } from "@/lib/url-validator";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -9,6 +10,14 @@ export async function POST(req: Request) {
 
   const { feedUrl, sourceTitle, sourceUrl } = await req.json();
   if (!feedUrl) return NextResponse.json({ error: "feedUrl required" }, { status: 400 });
+
+  // Validate before storing — the cron refresher later fetches this URL
+  // server-side, so an unvalidated URL is an SSRF vector (HTTPS-only, no
+  // private/loopback addresses). Matches the import + collections paths.
+  const urlCheck = await validateFeedUrl(feedUrl);
+  if (!urlCheck.valid) {
+    return NextResponse.json({ error: urlCheck.error }, { status: 400 });
+  }
 
   const displayName = user.email?.split("@")[0] ?? "Curator";
   const curator = await ensureCurator(user.id, displayName);

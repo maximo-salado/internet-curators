@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Keyboard } from "swiper/modules";
+import { Navigation, Keyboard, EffectCreative } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
 import type { Page } from "@/lib/compose-pages";
 import {
@@ -11,15 +13,16 @@ import {
   SquaresFour,
   DotsThree,
 } from "@phosphor-icons/react";
+import BookCoverClose from "@/components/reader/BookCoverClose";
 import CoverPage from "@/components/reader/CoverPage";
 import { ContextPage } from "@/components/reader/ContextPage";
 import { ArticlePage } from "@/components/reader/ArticlePage";
 import { SectionPage } from "@/components/reader/SectionPage";
-import EditorPage from "@/components/reader/EditorPage";
 import ClosingPage from "@/components/reader/ClosingPage";
 import TocDrawer from "@/components/reader/TocDrawer";
 import NavDrawer from "@/components/reader/NavDrawer";
 import "swiper/css";
+import "swiper/css/effect-creative";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,10 +49,17 @@ export default function SwipeStack({
   issueDate,
   bottomOffset = false,
 }: SwipeStackProps) {
+  const router = useRouter();
   // -- local state --
   const [selectedIndex, setSelectedIndex] = useState(startIndex);
+  const [turning, setTurning] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  // Cover art for the close animation (page 0 is always the cover)
+  const coverPage = pages.find((p) => p.type === "cover");
+  const coverImage = coverPage?.type === "cover" ? coverPage.coverImage : undefined;
 
   // -- sync URL on slide change --
   useEffect(() => {
@@ -64,15 +74,20 @@ export default function SwipeStack({
   const renderPage = (page: Page) => {
     switch (page.type) {
       case "cover":
-        return <CoverPage />;
+        return <CoverPage coverImage={page.coverImage} />;
       case "context":
-        return <ContextPage />;
+        return (
+          <ContextPage
+            issueNumber={issueNumber}
+            issueDate={issueDate}
+            pages={pages}
+            onNavigate={(index) => swiperRef.current?.slideTo(index)}
+          />
+        );
       case "article":
         return <ArticlePage item={page.item} />;
       case "section":
         return <SectionPage topics={page.topics} />;
-      case "editor":
-        return <EditorPage />;
       case "closing":
         return <ClosingPage count={page.count} />;
     }
@@ -83,8 +98,34 @@ export default function SwipeStack({
     <div className="relative">
       {/* Swiper carousel */}
       <Swiper
-        modules={[Navigation, Keyboard]}
+        className={turning ? "rmag-turning" : undefined}
+        modules={[Navigation, Keyboard, EffectCreative]}
         direction="horizontal"
+        effect="creative"
+        onSliderMove={() => setTurning(true)}
+        onTransitionStart={() => setTurning(true)}
+        onTransitionEnd={() => setTurning(false)}
+        onTouchEnd={() => {
+          // if the release doesn't trigger a snap transition, clear the flag
+          requestAnimationFrame(() => {
+            if (!swiperRef.current?.animating) setTurning(false);
+          });
+        }}
+        creativeEffect={{
+          // Page-turn feel: the outgoing page hinges away on its left (spine)
+          // edge in 3D while the next page slides up from beneath/right.
+          perspective: true,
+          limitProgress: 1,
+          prev: {
+            shadow: true,
+            origin: "left center",
+            translate: ["-12%", 0, 0],
+            rotate: [0, -82, 0],
+          },
+          next: {
+            translate: ["100%", 0, 0],
+          },
+        }}
         initialSlide={startIndex}
         onSlideChange={(swiper) => {
           setSelectedIndex(swiper.activeIndex);
@@ -115,7 +156,9 @@ export default function SwipeStack({
         style={{ height: "100dvh", width: "100%" }}
       >
         {pages.map((page, i) => (
-          <SwiperSlide key={i}>{renderPage(page)}</SwiperSlide>
+          <SwiperSlide key={i} className="bg-[var(--reader-bg)]">
+            {renderPage(page)}
+          </SwiperSlide>
         ))}
       </Swiper>
 
@@ -125,13 +168,18 @@ export default function SwipeStack({
 
       {/* Header */}
       <header className="fixed top-0 inset-x-0 z-40 h-14 flex items-center justify-between px-4">
-        <a
-          href="/issues"
+        <button
+          onClick={() => {
+            if (closing) return;
+            sessionStorage.setItem("mag-close-from", String(issueNumber));
+            router.prefetch("/issues");
+            setClosing(true);
+          }}
           className="flex h-10 w-10 items-center justify-center text-zinc-300 hover:text-white transition-colors"
           aria-label="Back to shelf"
         >
           <SquaresFour size={20} />
-        </a>
+        </button>
         <button
           onClick={() => setTocOpen(true)}
           className="flex items-center gap-1 text-sm text-zinc-300 hover:text-white transition-colors"
@@ -158,7 +206,7 @@ export default function SwipeStack({
         >
           <CaretLeft size={22} />
         </button>
-        <span className="text-xs text-zinc-500 tabular-nums">
+        <span className="text-xs text-zinc-400 tabular-nums">
           {selectedIndex + 1} of {pages.length}
         </span>
         <button
@@ -185,6 +233,18 @@ export default function SwipeStack({
       />
       {/* Nav drawer */}
       <NavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
+
+      {/* Book-close animation → shelf (mirror of the open) */}
+      {closing &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <BookCoverClose
+            coverImage={coverImage}
+            issueNumber={issueNumber}
+            onComplete={() => router.push("/issues")}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

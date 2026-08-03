@@ -23,11 +23,10 @@ export interface FeedItem {
 }
 
 export type Page =
-  | { type: "cover" }
+  | { type: "cover"; coverImage?: string }
   | { type: "context" }
   | { type: "article"; item: FeedItem }
   | { type: "section"; topics: Tag[] }
-  | { type: "editor" }
   | { type: "closing"; count: number };
 
 // ---- composePages ----
@@ -38,27 +37,24 @@ const CHUNK_SIZE = 5;
  * Compose a sequence of pages for a daily issue from a flat list of feed items.
  *
  * Page ordering:
- *   Cover → Context → [articles in groups of 5, each followed by a Section
- *   that collects unique topic tags from those 5 articles] →
- *   Editor (inserted at floor(count/2) position, replacing the Section
- *   that would appear there) → Closing
+ *   Cover → Context (editorial + contents index) → [articles in groups of 5,
+ *   each followed by a Section that collects unique topic tags from those 5
+ *   articles] → Closing
  *
  * A Section is suppressed (omitted) when fewer than 3 articles remain after it.
  */
 export function composePages(
-  issue: { count: number },
+  issue: { count: number; leadImage?: string },
   items: FeedItem[],
 ): Page[] {
   const pages: Page[] = [];
   const { count } = issue;
 
   // Always open with Cover then Context
-  pages.push({ type: "cover" });
+  pages.push({ type: "cover", coverImage: issue.leadImage });
   pages.push({ type: "context" });
 
-  const editorPosition = Math.floor(count / 2);
   let articlesProcessed = 0;
-  let editorInserted = false;
 
   for (let i = 0; i < items.length; i += CHUNK_SIZE) {
     const chunk = items.slice(i, i + CHUNK_SIZE);
@@ -68,13 +64,6 @@ export function composePages(
       pages.push({ type: "article", item });
     }
     articlesProcessed += chunk.length;
-
-    // Editor replaces the Section slot at the midpoint
-    if (!editorInserted && articlesProcessed >= editorPosition) {
-      pages.push({ type: "editor" });
-      editorInserted = true;
-      continue; // skip the Section that Editor replaces
-    }
 
     // Section after each chunk (unless suppressed)
     if (articlesProcessed < count) {
