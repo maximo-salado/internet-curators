@@ -37,8 +37,8 @@ export default function BookCoverOpen({
   const done = useRef(false);
 
   // Sequential: rotate (780ms) then zoom (460ms). Simultaneous: both at once.
-  const rotMs = simultaneous ? 640 : 780;
-  const zoomMs = simultaneous ? 640 : 460;
+  const rotMs = simultaneous ? 860 : 780;
+  const zoomMs = simultaneous ? 860 : 460;
   const zoomEase = simultaneous ? "cubic-bezier(0.33,0,0.15,1)" : "ease-in";
 
   const finish = () => {
@@ -93,7 +93,7 @@ export default function BookCoverOpen({
         {/* Revealed first page (behind the cover). Kept near-black to match the
             reader's loading screen so the hand-off doesn't flash/jar. */}
         <div
-          className="absolute inset-0 overflow-hidden bg-black"
+          className="absolute inset-0 overflow-hidden bg-[var(--reader-bg)]"
           style={{ boxShadow: "inset 12px 0 32px rgba(0,0,0,0.7)" }}
         >
           <div className="flex h-full w-full flex-col items-center justify-center gap-2">

@@ -115,7 +115,7 @@ export default function Magazine({ issue, isOpen, onRequestOpen }: MagazineProps
       {phase === "opening" &&
         typeof document !== "undefined" &&
         createPortal(
-          <BookCoverOpen issue={issue} originRect={originRect} onComplete={handleOpenComplete} />,
+          <BookCoverOpen issue={issue} originRect={originRect} simultaneous onComplete={handleOpenComplete} />,
           document.body,
         )}
     </>
