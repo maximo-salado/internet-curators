@@ -17,13 +17,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Sign in to interact" }, { status: 401 });
   }
 
-  const { articleId, action, articleLink } = await req.json();
+  const { articleId, action } = await req.json();
 
   if (!articleId || !action || !VALID_ACTIONS.includes(action)) {
     return NextResponse.json(
       { error: "articleId and valid action required" },
       { status: 400 }
     );
+  }
+
+  // Resolve the canonical article link server-side from articleId.
+  // NEVER trust a client-supplied link — otherwise a user could apply their
+  // vote to a *different* article's aggregate counts.
+  let articleLink: string | null = null;
+  if (action === "upvote" || action === "downvote") {
+    const { data: article } = await supabase
+      .from("articles")
+      .select("link")
+      .eq("id", articleId)
+      .maybeSingle();
+    if (!article) {
+      return NextResponse.json({ error: "Article not found" }, { status: 404 });
+    }
+    articleLink = article.link;
   }
 
   // Check if this action already exists (toggle pattern)

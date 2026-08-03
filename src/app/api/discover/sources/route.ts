@@ -29,9 +29,14 @@ export async function GET(req: Request) {
     .select("*", { count: "exact" })
     .order("discovered_at", { ascending: order === "asc" });
 
-  // 1. Apply search filter (ILIKE on title and feed_url)
+  // 1. Apply search filter (ILIKE on title and feed_url).
+  // The user term is interpolated into a PostgREST `.or()` string, where `,`
+  // `.` `(` `)` are reserved syntax — wrap the value in double quotes so those
+  // are treated literally, and escape `"` / `\` (the quoted-value escape chars)
+  // to prevent filter injection.
   if (search) {
-    query = query.or(`title.ilike.%${search}%,feed_url.ilike.%${search}%`);
+    const safe = search.replace(/[\\"]/g, (m) => "\\" + m);
+    query = query.or(`title.ilike."%${safe}%",feed_url.ilike."%${safe}%"`);
   }
 
   // 2. Apply status filter

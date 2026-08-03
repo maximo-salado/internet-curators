@@ -26,12 +26,14 @@ export default async function AdminLayout({
           >
             &larr; Back to site
           </Link>
-          <Link
-            href="/auth/signout"
-            className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
-          >
-            Sign out
-          </Link>
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
         </nav>
       </header>
       <main>{children}</main>

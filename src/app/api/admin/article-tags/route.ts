@@ -1,22 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireEditor } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 
 export async function GET(req: Request) {
-  const supabase = await createClient();
+  const auth = await requireEditor();
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const { supabase } = auth;
   const { searchParams } = new URL(req.url);
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: curator } = await supabase
-    .from("curators")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (curator?.role !== "editor") {
-    return NextResponse.json({ error: "Editor role required" }, { status: 403 });
-  }
 
   const limit = Math.min(100, parseInt(searchParams.get("limit") ?? "50"));
   const sourceId = searchParams.get("source_id");
