@@ -42,12 +42,13 @@ export async function GET() {
     countMap.set(row.issue_id, (countMap.get(row.issue_id) ?? 0) + 1);
   }
 
-  const imageMap = new Map<string, string | null>();
+  // Cover = the first article (by position) that actually has an image, so an
+  // image-less lead article doesn't leave the whole issue without a cover.
+  const imageMap = new Map<string, string>();
   for (const row of imagesResult.data ?? []) {
-    if (!imageMap.has(row.issue_id)) {
-      const articles = row.articles as { image?: string } | null;
-      imageMap.set(row.issue_id, articles?.image ?? null);
-    }
+    if (imageMap.has(row.issue_id)) continue;
+    const articles = row.articles as { image?: string } | null;
+    if (articles?.image) imageMap.set(row.issue_id, articles.image);
   }
 
   const result: IssueSummary[] = issues.map((issue) => ({
