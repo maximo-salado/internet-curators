@@ -32,10 +32,19 @@ export default function BookCoverClose({ coverImage, issueNumber, onComplete }: 
     onComplete();
   };
 
-  // Target card box: centered, matching the shelf card proportions.
+  // Target card box: prefer the exact rect the cover opened from (stashed by
+  // the shelf), so the close shrinks back to the real shelf-cover size/position.
+  // Fall back to a centered card matching the shelf proportions.
   const [card] = useState<Rect>(() => {
     if (typeof window === "undefined") return { left: 0, top: 0, width: 300, height: 450 };
-    const w = Math.min(window.innerWidth * 0.75, 320);
+    try {
+      const raw = sessionStorage.getItem("mag-card-rect");
+      if (raw) {
+        const r = JSON.parse(raw);
+        if (r && typeof r.width === "number" && r.width > 0) return r as Rect;
+      }
+    } catch {}
+    const w = Math.min(window.innerWidth * 0.7, 300);
     const h = w * 1.5;
     return { left: (window.innerWidth - w) / 2, top: (window.innerHeight - h) / 2, width: w, height: h };
   });

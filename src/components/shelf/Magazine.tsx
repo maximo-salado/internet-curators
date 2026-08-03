@@ -30,7 +30,13 @@ export default function Magazine({ issue, isOpen, onRequestOpen }: MagazineProps
       // out of it (shared-element feel) instead of popping in at a fixed size
       if (cardRef.current) {
         const r = cardRef.current.getBoundingClientRect();
-        setOriginRect({ left: r.left, top: r.top, width: r.width, height: r.height });
+        const rect = { left: r.left, top: r.top, width: r.width, height: r.height };
+        setOriginRect(rect);
+        // Stash it so the reader's close animation can shrink back to the exact
+        // same size/position (the shelf re-centers on this issue on return).
+        try {
+          sessionStorage.setItem("mag-card-rect", JSON.stringify(rect));
+        } catch {}
       }
       // warm the reader route so the book-open animation masks the load.
       // page=2 → slide index 1 (first content page); cover stays as index 0.
