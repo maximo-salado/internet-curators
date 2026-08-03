@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import useEmblaCarousel from "embla-carousel-react";
 import { Calendar, List, X } from "@phosphor-icons/react";
 import lottie from "lottie-web";
 import type { IssueSummary } from "@/app/api/issues/route";
 import Magazine from "./Magazine";
+import BookCoverOpen from "./BookCoverOpen";
 import NavDrawer from "@/components/reader/NavDrawer";
 import bookmarkAnim from "@/lottie/bookmark.json";
 
@@ -33,6 +35,10 @@ export default function ShelfCarousel() {
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [bookmarkOpening, setBookmarkOpening] = useState(false);
+  const [bookmarkRect, setBookmarkRect] = useState<{
+    left: number; top: number; width: number; height: number;
+  } | null>(null);
 
   // Bookmark — read saved position from localStorage (existing system)
   const resumeData = useMemo(() => {
@@ -256,6 +262,35 @@ export default function ShelfCarousel() {
     return () => anim.destroy();
   }, [loading, resumeData]);
 
+  // Resolve the bookmarked issue so "Continue where you left" can play the
+  // book-open animation (rise from the bottom → open → zoom into the page).
+  const resumeIssue = useMemo(
+    () =>
+      resumeData
+        ? issues.find((i) => i.number === resumeData.issueNumber) ?? null
+        : null,
+    [resumeData, issues],
+  );
+
+  const handleResume = useCallback(
+    (e: React.MouseEvent) => {
+      // Fall back to plain <a> navigation if we can't animate.
+      if (!resumeData || !resumeIssue || typeof window === "undefined") return;
+      e.preventDefault();
+      const w = Math.min(window.innerWidth * 0.42, 168);
+      const h = w * 1.5;
+      setBookmarkRect({
+        left: (window.innerWidth - w) / 2,
+        top: window.innerHeight - h - 16,
+        width: w,
+        height: h,
+      });
+      router.prefetch(resumeData.href);
+      setBookmarkOpening(true);
+    },
+    [resumeData, resumeIssue, router],
+  );
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-black">
@@ -365,6 +400,7 @@ export default function ShelfCarousel() {
         <div className="fixed bottom-6 inset-x-0 z-40 flex justify-center pointer-events-none">
           <a
             href={resumeData.href}
+            onClick={handleResume}
             className="pointer-events-auto inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-800 text-amber-400 rounded-full text-base font-medium hover:bg-zinc-700 hover:text-amber-300 transition-colors shadow-lg shadow-black/40 border border-zinc-700/50"
           >
             <div ref={bookmarkRef} style={{ width: 16, height: 16 }} />
@@ -372,6 +408,21 @@ export default function ShelfCarousel() {
           </a>
         </div>
       )}
+
+      {/* "Continue where you left" book-open: rises from the bottom, opens,
+          and zooms into the saved page. */}
+      {bookmarkOpening &&
+        resumeIssue &&
+        resumeData &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <BookCoverOpen
+            issue={resumeIssue}
+            originRect={bookmarkRect}
+            onComplete={() => router.push(resumeData.href)}
+          />,
+          document.body,
+        )}
 
       {/* NavDrawer (hamburger menu) — only mount when open to avoid backdrop stacking conflicts */}
       {menuOpen && <NavDrawer open={menuOpen} onClose={() => setMenuOpen(false)} />}
