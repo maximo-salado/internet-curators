@@ -1,5 +1,5 @@
-import IssueReader from "@/components/reader/IssueReader";
+import { redirect } from "next/navigation";
 
 export default function ReaderPage() {
-  return <IssueReader />;
+  redirect("/issues");
 }

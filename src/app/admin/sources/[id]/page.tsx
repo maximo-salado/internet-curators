@@ -53,7 +53,7 @@ interface DiscoveredSource {
 const FACET_COLORS: Record<string, string> = {
   topic: "bg-blue-900/40 text-blue-300 border-blue-800",
   voice: "bg-purple-900/40 text-purple-300 border-purple-800",
-  format: "bg-amber-900/40 text-amber-300 border-amber-800",
+  format: "bg-zinc-700/40 text-zinc-300 border-zinc-600",
   language: "bg-emerald-900/40 text-emerald-300 border-emerald-800",
   stance: "bg-rose-900/40 text-rose-300 border-rose-800",
 };

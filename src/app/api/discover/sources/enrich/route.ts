@@ -1,22 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireEditor } from "@/lib/admin-auth";
 import { detectTrustSignals } from "@/lib/trust-signals";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-
-  // Auth check: must be authenticated editor (matches pattern from PATCH handler)
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: curator } = await supabase
-    .from("curators")
-    .select("id, role")
-    .eq("user_id", user.id)
-    .single();
-  if (!curator || curator.role !== "editor") {
-    return NextResponse.json({ error: "Editor role required" }, { status: 403 });
-  }
+  const auth = await requireEditor();
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const { supabase } = auth;
 
   const body = await req.json();
   const sourceId = body.source_id as string;

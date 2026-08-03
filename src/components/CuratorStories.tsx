@@ -38,7 +38,7 @@ export function CuratorStories() {
                 </span>
               </div>
             </div>
-            <span className="text-[11px] text-zinc-400 truncate w-full text-center leading-tight">
+            <span className="text-xs text-zinc-400 truncate w-full text-center leading-tight">
               {c.display_name}
             </span>
           </Link>

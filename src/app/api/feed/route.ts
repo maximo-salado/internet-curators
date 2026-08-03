@@ -35,6 +35,7 @@ interface IssueResponse {
   origin: string;
   isToday: boolean;
   published: boolean;
+  leadImage?: string;
 }
 
 // ---- Source interleave helper ----
@@ -198,6 +199,7 @@ export async function GET(req: Request) {
         origin: issue.origin,
         isToday: issue.date === todayEST,
         published: issue.published,
+        leadImage: undefined,
       },
       items: [],
       latestNumber,
@@ -257,6 +259,7 @@ export async function GET(req: Request) {
       origin: issue.origin,
       isToday: issue.date === todayEST,
       published: issue.published,
+      leadImage: items[0]?.image,
     } satisfies IssueResponse,
     items: withTags,
     latestNumber,

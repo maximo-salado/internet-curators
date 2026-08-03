@@ -1,10 +1,22 @@
-import type { Page } from "@/lib/compose-pages";
+interface CoverPageProps {
+  coverImage?: string;
+}
 
-export default function CoverPage() {
+export default function CoverPage({ coverImage }: CoverPageProps) {
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full bg-black text-zinc-100 select-none">
+    <div
+      className="flex flex-col items-center justify-center h-full w-full bg-[var(--reader-bg)] text-zinc-100 select-none"
+      style={
+        coverImage
+          ? { backgroundImage: `url(${coverImage})`, backgroundSize: "cover", backgroundPosition: "center" }
+          : undefined
+      }
+    >
+      {/* Dark overlay for text readability */}
+      {coverImage && <div className="absolute inset-0 bg-black/60" />}
+
       {/* Magazine identity */}
-      <div className="flex flex-col items-center gap-3">
+      <div className="relative z-10 flex flex-col items-center gap-3">
         <h1 className="text-6xl sm:text-7xl font-serif font-bold tracking-tight">
           RSSMag
         </h1>
@@ -15,7 +27,7 @@ export default function CoverPage() {
       </div>
 
       {/* Swipe hint */}
-      <div className="absolute bottom-10 flex items-center gap-2 text-zinc-600 text-xs animate-pulse">
+      <div className="absolute bottom-10 flex items-center gap-2 text-zinc-400 text-xs animate-pulse">
         <span>swipe to open</span>
         <svg
           width="14"

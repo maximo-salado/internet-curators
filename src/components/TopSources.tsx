@@ -51,7 +51,7 @@ export function TopSources({ sources }: TopSourcesProps) {
               {source.title}
             </span>
             {/* URL */}
-            <span className="text-[11px] text-zinc-500 truncate">
+            <span className="text-xs text-zinc-500 truncate">
               {cleanDomain(source.site_url)}
             </span>
           </Link>

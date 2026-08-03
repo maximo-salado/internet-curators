@@ -118,7 +118,7 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
             ) : (
               <Link
                 href={`/login?next=${encodeURIComponent(pathname)}`}
-                className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
+                className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
               >
                 Sign In
               </Link>
@@ -159,7 +159,7 @@ export function Header({ initialUser, editorPendingCount }: HeaderProps) {
             ) : (
               <Link
                 href={`/login?next=${encodeURIComponent(pathname)}`}
-                className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
+                className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
               >
                 Sign In
               </Link>

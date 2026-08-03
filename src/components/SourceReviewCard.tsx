@@ -43,7 +43,7 @@ const platformColors: Record<string, string> = {
   substack: "bg-orange-900/50 text-orange-300",
   ghost: "bg-blue-900/50 text-blue-300",
   wordpress: "bg-sky-900/50 text-sky-300",
-  bearblog: "bg-amber-900/50 text-amber-300",
+  bearblog: "bg-zinc-700/50 text-zinc-300",
   mastodon: "bg-purple-900/50 text-purple-300",
   lemmy: "bg-green-900/50 text-green-300",
   microblog: "bg-pink-900/50 text-pink-300",
@@ -218,7 +218,7 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
                 ✗ Reject
               </button>
               <button onClick={() => handleAction("parked")} disabled={loading}
-                className="rounded-lg bg-amber-900/30 border border-amber-800 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-900/50 transition-colors disabled:opacity-50">
+                className="rounded-lg bg-zinc-700/30 border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700/50 transition-colors disabled:opacity-50">
                 ⏸ Park
               </button>
             </>
@@ -235,7 +235,7 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
                 ✗ Reject
               </button>
               <button onClick={() => handleAction("parked")} disabled={loading}
-                className="rounded-lg bg-amber-900/30 border border-amber-800 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-900/50 transition-colors disabled:opacity-50">
+                className="rounded-lg bg-zinc-700/30 border border-zinc-600 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700/50 transition-colors disabled:opacity-50">
                 ⏸ Park
               </button>
             </>
@@ -252,14 +252,14 @@ export function SourceReviewCard({ source, isEditor, onTransition }: Props) {
                 ✓ Approve
               </button>
               <button onClick={() => handleAction("parked")} disabled={loading}
-                className="rounded-lg bg-amber-900/30 border border-amber-800 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-900/50 transition-colors disabled:opacity-50">
+                className="rounded-lg bg-zinc-700/30 border border-zinc-600 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700/50 transition-colors disabled:opacity-50">
                 ⏸ Park
               </button>
             </>
           )}
           {source.status === "parked" && (
             <>
-              <span className="text-xs font-medium text-amber-400 self-center mr-auto">⏸ Parked</span>
+              <span className="text-xs font-medium text-zinc-300 self-center mr-auto">⏸ Parked</span>
               <button onClick={() => handleAction("pending")} disabled={loading}
                 className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-400 hover:bg-zinc-700 transition-colors disabled:opacity-50">
                 ↩ Pending

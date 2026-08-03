@@ -244,7 +244,7 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
                 setTopicsOpen(!topicsOpen);
                 setVoiceOpen(false);
               }}
-              className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors min-h-[44px] ${
+              className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium transition-colors min-h-[44px] ${
                 activeTopic
                   ? "bg-zinc-200 text-zinc-900"
                   : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
@@ -278,7 +278,7 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
           <div className="relative">
             <button
               onClick={() => { setVoiceOpen(!voiceOpen); setTopicsOpen(false); }}
-              className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors min-h-[44px] ${
+              className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium transition-colors min-h-[44px] ${
                 activeVoice ? "bg-zinc-200 text-zinc-900" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
               }`}>
               {activeVoice ? voiceTags.find((t) => t.slug === activeVoice)?.name ?? "Voice" : "Voice ▾"}
@@ -315,7 +315,7 @@ export function FiltersBar({ onFilterChange, activeTagSlugs }: FiltersBarProps) 
           {hasFilters && (
             <button
               onClick={clearAll}
-              className="ml-auto flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300 transition-colors shrink-0"
+              className="ml-auto flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300 transition-colors shrink-0"
             >
               ✕ Clear ({activeFilterCount})
             </button>

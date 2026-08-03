@@ -4,7 +4,7 @@ interface ClosingPageProps {
 
 export default function ClosingPage({ count }: ClosingPageProps) {
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full bg-black text-zinc-100 select-none">
+    <div className="flex flex-col items-center justify-center h-full w-full bg-[var(--reader-bg)] text-zinc-100 select-none">
       <div className="flex flex-col items-center gap-6 max-w-md px-6 text-center">
         {/* Heading */}
         <h1 className="text-5xl sm:text-6xl font-serif font-bold tracking-tight">
@@ -38,7 +38,7 @@ export default function ClosingPage({ count }: ClosingPageProps) {
         </div>
 
         {/* Final line */}
-        <p className="text-xs text-zinc-600 pt-4">
+        <p className="text-sm text-zinc-400 pt-4">
           Come back tomorrow for a fresh issue.
         </p>
       </div>
