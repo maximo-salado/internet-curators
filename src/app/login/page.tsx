@@ -10,12 +10,16 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    // Created here rather than during render: this page is prerendered at build
+    // time, and createClient() reads NEXT_PUBLIC_SUPABASE_* eagerly, so calling
+    // it in the render body fails any build without those vars set.
+    const supabase = createClient();
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
