@@ -3,6 +3,11 @@ name: CI
 on:
   pull_request:
     branches: [main, develop]
+  # Also build main directly. A squash merge can produce a main that neither
+  # side's PR run ever built (see #210: #208's squash dropped a file deletion
+  # and left main unbuildable for 20 hours, unnoticed).
+  push:
+    branches: [main]
 
 jobs:
   build:
